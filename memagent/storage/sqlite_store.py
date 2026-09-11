@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import aiosqlite
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,7 +18,6 @@ class SqliteMetadataStore:
         self._init_db_sync()
 
     def _init_db_sync(self):
-        """Synchronous migration / table creation on startup."""
         conn = sqlite3.connect(str(self.db_path))
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
@@ -126,6 +126,18 @@ class SqliteMetadataStore:
             """, (now, new_memory_id, memory_id))
             await db.commit()
 
+    async def deactivate_memory(self, memory_id: str) -> bool:
+        """Soft-deletes / deactivates a memory manually from WebUI/API."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            cursor = await db.execute("""
+                UPDATE memories
+                SET is_active = 0, updated_at = ?
+                WHERE id = ?
+            """, (now, memory_id))
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def search_bm25(self, query: str, top_k: int = 20) -> List[Dict[str, Any]]:
         sanitized = " ".join([f'"{part}"' for part in query.replace('"', '').split() if part.isalnum()])
         if not sanitized:
@@ -157,3 +169,37 @@ class SqliteMetadataStore:
     async def get_memory_by_id(self, memory_id: str) -> Optional[Dict[str, Any]]:
         res = await self.get_memories_batch([memory_id])
         return res.get(memory_id)
+
+    async def list_all_memories(self, limit: int = 50, offset: int = 0, include_inactive: bool = True) -> List[Dict[str, Any]]:
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            query = "SELECT * FROM memories "
+            if not include_inactive:
+                query += "WHERE is_active = 1 "
+            query += "ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            cursor = await db.execute(query, (limit, offset))
+            rows = await cursor.fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["metadata"] = json.loads(d.get("metadata_json", "{}"))
+                results.append(d)
+            return results
+
+    async def get_engine_stats(self) -> Dict[str, Any]:
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            c1 = await db.execute("SELECT COUNT(*) FROM memories")
+            total = (await c1.fetchone())[0]
+            c2 = await db.execute("SELECT COUNT(*) FROM memories WHERE is_active = 1")
+            active = (await c2.fetchone())[0]
+            c3 = await db.execute("SELECT COUNT(DISTINCT entity_key) FROM memories WHERE entity_key IS NOT NULL AND is_active = 1")
+            entities = (await c3.fetchone())[0]
+
+        db_size_bytes = os.path.getsize(self.db_path) if self.db_path.exists() else 0
+        return {
+            "total_memories": total,
+            "active_memories": active,
+            "deprecated_memories": total - active,
+            "unique_entities": entities,
+            "db_size_kb": round(db_size_bytes / 1024, 2)
+        }

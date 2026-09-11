@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from memagent.config import settings
 from memagent.api.routes.health import router as health_router
 from memagent.api.routes.memory import router as memory_router
+from memagent.api.routes.dashboard import router as dashboard_router
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, tags=["Health"])
     app.include_router(memory_router, tags=["Memory Primitives"])
+    app.include_router(dashboard_router, tags=["Dashboard & Inspector"])
 
     return app
 
