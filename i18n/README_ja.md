@@ -41,7 +41,7 @@
 <br/>
 
 <a href="#webui-ダッシュボード--ナレッジグラフ">
-  <img src="../docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
+  <img src="../docs/assets/elephantine_banner.png" alt="ELEPHANTINE: Remember - Recall - Answer" width="100%" />
 </a>
 
 <br/>
