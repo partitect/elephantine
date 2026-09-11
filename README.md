@@ -25,6 +25,15 @@
   <a href="#benchmark--performance">Benchmarks</a>
 </p>
 
+<p align="center">
+  <b>Translations:</b>
+  <a href="README.md">English</a> |
+  <a href="i18n/README_tr.md">Türkçe</a> |
+  <a href="i18n/README_zh.md">简体中文</a> |
+  <a href="i18n/README_es.md">Español</a> |
+  <a href="i18n/README_ja.md">日本語</a>
+</p>
+
 ---
 
 <br/>

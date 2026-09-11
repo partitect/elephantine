@@ -208,14 +208,29 @@ class SqliteMetadataStore:
         res = await self.get_memories_batch([memory_id])
         return res.get(memory_id)
 
-    async def list_all_memories(self, limit: int = 50, offset: int = 0, include_inactive: bool = True) -> List[Dict[str, Any]]:
+    async def list_all_memories(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        include_inactive: bool = True,
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         async with aiosqlite.connect(str(self.db_path)) as db:
             db.row_factory = aiosqlite.Row
-            query = "SELECT * FROM memories "
+            conditions = []
+            params: List[Any] = []
+
             if not include_inactive:
-                query += "WHERE is_active = 1 "
-            query += "ORDER BY created_at DESC LIMIT ? OFFSET ?"
-            cursor = await db.execute(query, (limit, offset))
+                conditions.append("is_active = 1")
+            if workspace_id:
+                conditions.append("workspace_id = ?")
+                params.append(workspace_id)
+
+            where_clause = f"WHERE {' AND '.join(conditions)} " if conditions else ""
+            query = f"SELECT * FROM memories {where_clause}ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            cursor = await db.execute(query, tuple(params))
             rows = await cursor.fetchall()
             results = []
             for r in rows:
@@ -224,14 +239,30 @@ class SqliteMetadataStore:
                 results.append(d)
             return results
 
-    async def get_engine_stats(self) -> Dict[str, Any]:
+    async def get_all_workspaces(self) -> List[str]:
+        """Returns unique workspace/project IDs existing in the store."""
         async with aiosqlite.connect(str(self.db_path)) as db:
-            c1 = await db.execute("SELECT COUNT(*) FROM memories")
-            total = (await c1.fetchone())[0]
-            c2 = await db.execute("SELECT COUNT(*) FROM memories WHERE is_active = 1")
-            active = (await c2.fetchone())[0]
-            c3 = await db.execute("SELECT COUNT(DISTINCT entity_key) FROM memories WHERE entity_key IS NOT NULL AND is_active = 1")
-            entities = (await c3.fetchone())[0]
+            cursor = await db.execute("SELECT DISTINCT workspace_id FROM memories WHERE workspace_id IS NOT NULL ORDER BY workspace_id ASC")
+            rows = await cursor.fetchall()
+            workspaces = [r[0] for r in rows if r[0]]
+            return workspaces if workspaces else ["default"]
+
+    async def get_engine_stats(self, workspace_id: Optional[str] = None) -> Dict[str, Any]:
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            if workspace_id:
+                c1 = await db.execute("SELECT COUNT(*) FROM memories WHERE workspace_id = ?", (workspace_id,))
+                total = (await c1.fetchone())[0]
+                c2 = await db.execute("SELECT COUNT(*) FROM memories WHERE is_active = 1 AND workspace_id = ?", (workspace_id,))
+                active = (await c2.fetchone())[0]
+                c3 = await db.execute("SELECT COUNT(DISTINCT entity_key) FROM memories WHERE entity_key IS NOT NULL AND is_active = 1 AND workspace_id = ?", (workspace_id,))
+                entities = (await c3.fetchone())[0]
+            else:
+                c1 = await db.execute("SELECT COUNT(*) FROM memories")
+                total = (await c1.fetchone())[0]
+                c2 = await db.execute("SELECT COUNT(*) FROM memories WHERE is_active = 1")
+                active = (await c2.fetchone())[0]
+                c3 = await db.execute("SELECT COUNT(DISTINCT entity_key) FROM memories WHERE entity_key IS NOT NULL AND is_active = 1")
+                entities = (await c3.fetchone())[0]
 
         db_size_bytes = os.path.getsize(self.db_path) if self.db_path.exists() else 0
         return {

@@ -16,7 +16,8 @@ async def test_remember_and_recall_pipeline():
             "content": "User prefers dark mode and postgresql for database.",
             "category": "preference",
             "source_agent": "agent-test",
-            "entity_key": "user_preference:theme"
+            "entity_key": "user_preference:theme",
+            "workspace_id": "pipeline-test-ws"
         })
         assert remember_resp1.status_code == 200
         data1 = remember_resp1.json()
@@ -28,7 +29,8 @@ async def test_remember_and_recall_pipeline():
             "content": "User prefers light mode and sqlite for embedded work.",
             "category": "preference",
             "source_agent": "agent-test",
-            "entity_key": "user_preference:theme"
+            "entity_key": "user_preference:theme",
+            "workspace_id": "pipeline-test-ws"
         })
         assert remember_resp2.status_code == 200
         data2 = remember_resp2.json()
@@ -37,7 +39,8 @@ async def test_remember_and_recall_pipeline():
         # 4. Recall memory
         recall_resp = await client.post("/recall", json={
             "query": "What are user's theme and database preferences?",
-            "top_k": 3
+            "top_k": 3,
+            "workspace_id": "pipeline-test-ws"
         })
         assert recall_resp.status_code == 200
         rec = recall_resp.json()

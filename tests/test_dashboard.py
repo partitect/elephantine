@@ -22,3 +22,8 @@ async def test_dashboard_and_stats():
         mem_res = await client.get("/api/v1/memories?limit=10")
         assert mem_res.status_code == 200
         assert isinstance(mem_res.json(), list)
+
+        ws_res = await client.get("/api/v1/workspaces")
+        assert ws_res.status_code == 200
+        assert isinstance(ws_res.json(), list)
+        assert len(ws_res.json()) >= 1
