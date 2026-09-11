@@ -100,15 +100,31 @@
 ---
 
 <a id="快速上手"></a>
-## 🚀 快速上手（30 秒）
+## 🚀 快速上手与 CLI 安装
 
-### 方式 A：通过 pip 安装（推荐）
+### 1. 安装 Elephantine CLI
+
+通过主流 Python 包管理器安装 Elephantine 后，`elephantine` 命令会自动添加到系统终端 PATH：
+
 ```bash
-pip install elephantine
+# 推荐：使用 pipx 独立全局安装 CLI
+pipx install elephantine
 
-# 启动引擎服务与控制面板
+# 或使用 uv
+uv tool install elephantine
+
+# 或使用标准 pip
+pip install elephantine
+```
+
+> [!TIP]
+> 安装完成后，您可以在终端中直接调用所有命令（如 `elephantine start`、`elephantine install-antigravity`、`elephantine remember` 等）。如果环境 PATH 未生效，亦可通过 `python -m elephantine.cli <子命令>` 执行。
+
+### 2. 启动引擎服务与 WebUI 控制面板
+```bash
 elephantine start --port 8765
 ```
+在浏览器中打开 [http://localhost:8765/dashboard](http://localhost:8765/dashboard) 即可访问实时记忆检查器！
 
 ### 方式 B：源码安装（面向贡献者）
 ```bash
@@ -125,8 +141,6 @@ uv pip install -e ".[dev]"
 elephantine start --port 8765
 ```
 
-在浏览器中打开 [http://localhost:8765/dashboard](http://localhost:8765/dashboard) 即可访问实时记忆检查器！
-
 ---
 
 <a id="一键式-ide--智能体配置-mcp"></a>
@@ -135,7 +149,8 @@ elephantine start --port 8765
 Elephantine 通过原生 **Model Context Protocol (MCP)** 无缝对接主流开发工具：
 
 ### ⚡ 1 秒极速 CLI 自动安装
-无需手动寻找和编辑 JSON 文件，一键完成配置：
+在已安装 `elephantine` CLI 的环境下，无需手动寻找和编辑 JSON 文件，一键完成配置：
+
 
 ```bash
 # Google Antigravity (AGY)

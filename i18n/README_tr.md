@@ -100,15 +100,31 @@ Efsaneye göre filler, değişen çöl kumları arasında onlarca yıl önceki s
 ---
 
 <a id="hızlı-başlangıç"></a>
-## 🚀 Hızlı Başlangıç (30 Saniyede)
+## 🚀 Hızlı Başlangıç & CLI Kurulumu
 
-### Seçenek A: pip ile Kurulum (Önerilen)
+### 1. Elephantine CLI'yi Yükleyin
+
+Elephantine'i tercih ettiğiniz Python paket yöneticisiyle kurduğunuzda, `elephantine` komutu terminalinizde otomatik olarak küresel kullanıma hazır hale gelir:
+
 ```bash
-pip install elephantine
+# Önerilen: pipx ile bağımsız küresel CLI kurulumu
+pipx install elephantine
 
-# Motor sunucusunu ve gösterge panelini başlatın
+# Veya uv ile
+uv tool install elephantine
+
+# Veya standart pip ile
+pip install elephantine
+```
+
+> [!TIP]
+> Kurulum tamamlandıktan sonra tüm komutlara (`elephantine start`, `elephantine install-antigravity`, `elephantine remember` vb.) doğrudan terminalinizden erişebilirsiniz. Terminal ortam değişkenlerinizde (PATH) bir sorun olursa komutları alternatif olarak `python -m elephantine.cli <komut>` şeklinde de çalıştırabilirsiniz.
+
+### 2. Motor Sunucusunu ve Web Panelini Başlatın
+```bash
 elephantine start --port 8765
 ```
+Canlı Hafıza Müfettişini görüntülemek için tarayıcınızda [http://localhost:8765/dashboard](http://localhost:8765/dashboard) adresini açın!
 
 ### Seçenek B: Kaynak Koddan (Geliştiriciler İçin)
 ```bash
@@ -125,8 +141,6 @@ uv pip install -e ".[dev]"
 elephantine start --port 8765
 ```
 
-Canlı Hafıza Müfettişini görüntülemek için tarayıcınızda [http://localhost:8765/dashboard](http://localhost:8765/dashboard) adresini açın!
-
 ---
 
 <a id="tek-tıkla-ide--ajan-kurulumu-mcp"></a>
@@ -135,7 +149,8 @@ Canlı Hafıza Müfettişini görüntülemek için tarayıcınızda [http://loca
 Elephantine, yerel **Model Context Protocol (MCP)** ve yüksek hızlı REST uç noktalarıyla tüm büyük ortamlara bağlanır.
 
 ### ⚡ 1 Saniyede Otomatik CLI Kurulumu
-Elle JSON yapılandırması aramadan tek bir komutla favori ortamınıza kurun:
+`elephantine` CLI kurulu olduğunda, elle JSON yapılandırması aramadan tek bir komutla favori ortamınıza kurulum yapabilirsiniz:
+
 
 ```bash
 # Google Antigravity (AGY)

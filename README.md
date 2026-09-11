@@ -100,15 +100,31 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 ---
 
 <a id="quick-start"></a>
-## 🚀 Quick Start (30 Seconds)
+## 🚀 Quick Start & CLI Installation
 
-### Option A: Install via pip (Recommended)
+### 1. Install the Elephantine CLI
+
+Installing Elephantine automatically makes the `elephantine` command globally available in your terminal:
+
 ```bash
-pip install elephantine
+# Recommended: Standalone global CLI via pipx
+pipx install elephantine
 
-# Start the engine server & dashboard
+# Or with uv
+uv tool install elephantine
+
+# Or standard pip
+pip install elephantine
+```
+
+> [!TIP]
+> Once installed, you have instant access to all CLI commands (`elephantine start`, `elephantine install-antigravity`, `elephantine remember`, etc.). If your terminal PATH is not configured for Python scripts, you can also run `python -m elephantine.cli <command>`.
+
+### 2. Start the Engine Server & WebUI Dashboard
+```bash
 elephantine start --port 8765
 ```
+Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/dashboard) to view the live Memory Inspector!
 
 ### Option B: From Source (For Contributors)
 ```bash
@@ -125,8 +141,6 @@ uv pip install -e ".[dev]"
 elephantine start --port 8765
 ```
 
-Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/dashboard) to view the live Memory Inspector!
-
 ---
 
 <a id="ide--agent-setup-mcp"></a>
@@ -135,7 +149,8 @@ Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/das
 Elephantine connects to all major agentic IDEs, coding assistants, and desktop AI clients via native **Model Context Protocol (MCP)**.
 
 ### ⚡ 1-Second Automatic CLI Installers
-Configure your favorite AI agent environment in seconds with zero manual JSON editing:
+With the `elephantine` CLI installed, configure your favorite AI agent environment in seconds with zero manual JSON editing:
+
 
 ```bash
 # Google Antigravity (AGY)

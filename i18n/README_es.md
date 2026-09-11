@@ -100,15 +100,31 @@ La leyenda cuenta que los elefantes recuerdan los pozos de agua a través de dé
 ---
 
 <a id="inicio-rápido"></a>
-## 🚀 Inicio Rápido (30 Segundos)
+## 🚀 Inicio Rápido e Instalación de CLI
 
-### Opción A: Instalación vía pip (Recomendado)
+### 1. Instalar la CLI de Elephantine
+
+Al instalar Elephantine mediante tu gestor de paquetes de Python favorito, el comando `elephantine` estará disponible globalmente en tu terminal:
+
 ```bash
-pip install elephantine
+# Recomendado: CLI global independiente mediante pipx
+pipx install elephantine
 
-# Inicia el motor y el panel de control
+# O mediante uv
+uv tool install elephantine
+
+# O pip estándar
+pip install elephantine
+```
+
+> [!TIP]
+> Una vez instalado, tienes acceso directo a todos los comandos de la CLI (`elephantine start`, `elephantine install-antigravity`, `elephantine remember`, etc.). Si tu PATH no reconoce los scripts de Python, también puedes ejecutar `python -m elephantine.cli <comando>`.
+
+### 2. Iniciar el Servidor y el Panel WebUI
+```bash
 elephantine start --port 8765
 ```
+¡Abre tu navegador en [http://localhost:8765/dashboard](http://localhost:8765/dashboard) para ver el Inspector de Memoria en vivo!
 
 ### Opción B: Desde el Código Fuente (Para Contribuidores)
 ```bash
@@ -125,8 +141,6 @@ uv pip install -e ".[dev]"
 elephantine start --port 8765
 ```
 
-¡Abre tu navegador en [http://localhost:8765/dashboard](http://localhost:8765/dashboard) para ver el Inspector de Memoria en vivo!
-
 ---
 
 <a id="instalación-ide-en-1-clic-mcp"></a>
@@ -135,7 +149,8 @@ elephantine start --port 8765
 Elephantine se conecta a los principales entornos mediante el protocolo nativo **Model Context Protocol (MCP)**:
 
 ### ⚡ Instaladores Automáticos CLI en 1 Segundo
-Configura tu entorno preferido sin editar archivos JSON manualmente:
+Con la CLI `elephantine` instalada, configura tu entorno preferido sin editar archivos JSON manualmente:
+
 
 ```bash
 # Google Antigravity (AGY)

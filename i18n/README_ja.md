@@ -100,15 +100,31 @@
 ---
 
 <a id="クイックスタート"></a>
-## 🚀 クイックスタート（30秒で開始）
+## 🚀 クイックスタート & CLI インストール
 
-### 方法 A: pip によるインストール（推奨）
+### 1. Elephantine CLI のインストール
+
+お好みの Python パッケージマネージャーでインストールすると、ターミナル全体で `elephantine` コマンドが即座に使用可能になります：
+
 ```bash
-pip install elephantine
+# 推奨: pipx による独立グローバル CLI インストール
+pipx install elephantine
 
-# エンジンサーバーとダッシュボードの起動
+# または uv を使用
+uv tool install elephantine
+
+# または標準 pip
+pip install elephantine
+```
+
+> [!TIP]
+> インストールが完了すると、すべてのコマンド（`elephantine start`、`elephantine install-antigravity`、`elephantine remember` など）をターミナルから直接呼び出せます。ターミナルの環境変数（PATH）でコマンドが見つからない場合は、代替として `python -m elephantine.cli <コマンド>` でも実行可能です。
+
+### 2. エンジンサーバーと WebUI ダッシュボードの起動
+```bash
 elephantine start --port 8765
 ```
+ブラウザで [http://localhost:8765/dashboard](http://localhost:8765/dashboard) を開くと、ライブメモリインスペクターが表示されます！
 
 ### 方法 B: ソースコードから（開発者向け）
 ```bash
@@ -125,8 +141,6 @@ uv pip install -e ".[dev]"
 elephantine start --port 8765
 ```
 
-ブラウザで [http://localhost:8765/dashboard](http://localhost:8765/dashboard) を開くと、ライブメモリインスペクターが表示されます！
-
 ---
 
 <a id="1クリック-ide-環境設定-mcp"></a>
@@ -135,7 +149,8 @@ elephantine start --port 8765
 Elephantine は、ネイティブの **Model Context Protocol (MCP)** を介して主要な環境に即座に接続します：
 
 ### ⚡ 1秒自動 CLI インストーラー
-JSON ファイルを手動で探して編集する必要はありません：
+`elephantine` CLI がインストールされていれば、手動で JSON ファイルを編集することなく1コマンドで設定可能です：
+
 
 ```bash
 # Google Antigravity (AGY)
