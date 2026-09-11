@@ -9,7 +9,7 @@ def print_claude_config():
     python_exec = sys.executable
     config = {
         "mcpServers": {
-            "memagent": {
+            "elephantine": {
                 "command": python_exec,
                 "args": ["-m", "memagent.mcp.server"]
             }
@@ -24,13 +24,13 @@ def print_cursor_config():
     python_exec = sys.executable
     print("\n--- Cursor MCP Server Configuration ---")
     print("In Cursor Settings -> Features -> MCP Servers -> Add New:")
-    print("  Name: memagent")
+    print("  Name: elephantine")
     print("  Type: command")
     print(f"  Command: {python_exec} -m memagent.mcp.server")
     print("----------------------------------------\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="MemAgent: Local-First Cognitive AI Memory Engine")
+    parser = argparse.ArgumentParser(description="Elephantine: Zero-GPU, Local-First, CPU-Native AI Memory Layer")
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
     # start (REST server)

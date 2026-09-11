@@ -6,6 +6,7 @@
 
 **Zero-GPU, Local-First, CPU-Native Memory Layer for Autonomous AI Agents**
 
+[![PyPI Version](https://img.shields.io/pypi/v/elephantine.svg?color=blue)](https://pypi.org/project/elephantine/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-brightgreen.svg)](https://python.org)
 [![MCP Ready](https://img.shields.io/badge/MCP-Protocol%20Ready-blueviolet.svg)](https://modelcontextprotocol.io/)
@@ -118,8 +119,17 @@ flowchart TD
 
 ---
 
-## 🚀 Quick Start (2 Minutes)
+## 🚀 Quick Start (30 Seconds)
 
+### Option A: Install via pip (Recommended)
+```bash
+pip install elephantine
+
+# Start the engine server & dashboard
+elephantine start --port 8765
+```
+
+### Option B: From Source (For Contributors)
 ```bash
 # 1. Clone repository
 git clone https://github.com/partitect/elephantine.git
@@ -131,7 +141,7 @@ uv venv .venv
 uv pip install -e ".[dev]"
 
 # 3. Start the engine server & dashboard
-python -m memagent.cli start --port 8765
+elephantine start --port 8765
 ```
 
 Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/dashboard) to view the live Memory Inspector!
@@ -297,6 +307,16 @@ uv venv .venv
 uv pip install -e ".[dev]"
 pytest -v tests/
 ```
+
+---
+
+## 🌟 Star History
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=partitect/elephantine&type=Date)](https://star-history.com/#partitect/elephantine&Date)
+
+</div>
 
 ---
 
