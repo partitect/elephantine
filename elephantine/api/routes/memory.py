@@ -16,7 +16,10 @@ from elephantine.api.schemas import (
     WorkflowSnippet,
     GraphTripletSchema,
     GraphQueryRequest,
-    GraphQueryResponse
+    GraphQueryResponse,
+    ConsolidateRequest,
+    ConsolidateResponse,
+    PruneResponse
 )
 from elephantine.core.embedder import OnnxCpuEmbedder
 from elephantine.core.extractor import TwoStageMemoryExtractor
@@ -26,6 +29,8 @@ from elephantine.core.conflict import ConflictResolver
 from elephantine.storage.sqlite_store import SqliteMetadataStore
 from elephantine.storage.lancedb_store import LanceDbVectorStore
 from elephantine.storage.procedural_store import ProceduralMemoryStore
+from elephantine.core.buffer import AsyncMemoryWriteBuffer
+from elephantine.core.consolidator import MemoryConsolidator
 
 router = APIRouter()
 
@@ -40,6 +45,8 @@ class ServiceContainer:
         self.graph_extractor = RuleBasedGraphExtractor()
         self.scorer = HybridScorer()
         self.conflict_resolver = ConflictResolver(self.sqlite_store)
+        self.write_buffer = AsyncMemoryWriteBuffer(self.sqlite_store, self.lancedb_store)
+        self.consolidator = MemoryConsolidator(self.sqlite_store)
 
 _container: Optional[ServiceContainer] = None
 
@@ -296,3 +303,51 @@ async def get_workflow(
     if not wf:
         raise HTTPException(status_code=404, detail=f"Workflow pattern '{pattern_name}' not found")
     return wf
+
+@router.post("/memories/consolidate", response_model=ConsolidateResponse)
+async def consolidate_memories_endpoint(
+    req: ConsolidateRequest,
+    svc: ServiceContainer = Depends(get_container)
+):
+    """
+    Consolidates fragmented facts for an entity into a unified canonical summary,
+    preventing long-term memory bloat.
+    """
+    res = await svc.consolidator.consolidate_entity(
+        entity_key=req.entity_key,
+        workspace_id=req.workspace_id
+    )
+    if not res:
+        return ConsolidateResponse(
+            status="no_consolidation_needed",
+            entity_key=req.entity_key,
+            consolidated_count=0
+        )
+    return ConsolidateResponse(
+        status="consolidated",
+        canonical_id=res["canonical_id"],
+        entity_key=res["entity_key"],
+        consolidated_count=res["consolidated_count"],
+        canonical_content=res["canonical_content"]
+    )
+
+@router.post("/memories/prune", response_model=PruneResponse)
+async def prune_memories_endpoint(
+    older_than_days: int = Query(default=30, ge=1),
+    workspace_id: Optional[str] = Query(default=None),
+    svc: ServiceContainer = Depends(get_container)
+):
+    """
+    Prunes deprecated/superseded memories older than N days from storage.
+    """
+    pruned_count = await svc.consolidator.prune_all_inactive(
+        older_than_days=older_than_days,
+        workspace_id=workspace_id
+    )
+    return PruneResponse(
+        pruned_count=pruned_count,
+        older_than_days=older_than_days,
+        workspace_id=workspace_id,
+        message=f"Pruned {pruned_count} deprecated memories older than {older_than_days} days."
+    )
+

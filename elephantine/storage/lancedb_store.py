@@ -53,6 +53,24 @@ class LanceDbVectorStore:
         }]
         self.table.add(data)
 
+    def add_vectors_batch(self, items: List[Dict[str, Any]]) -> int:
+        """
+        Batch adds dense vectors in a single LanceDB Arrow commit.
+        """
+        if not items:
+            return 0
+        data = []
+        for item in items:
+            data.append({
+                "id": item["id"],
+                "vector": item["vector"],
+                "source_agent": item.get("source_agent", "unknown"),
+                "category": item.get("category", "general"),
+                "created_at_epoch": float(item.get("created_at_epoch", 0.0))
+            })
+        self.table.add(data)
+        return len(data)
+
     def search_similar(
         self,
         query_vector: List[float],

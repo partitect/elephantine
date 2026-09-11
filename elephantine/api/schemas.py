@@ -93,3 +93,21 @@ class WorkflowSnippet(BaseModel):
     success_count: int = 1
     failure_count: int = 0
     last_used: datetime
+
+class ConsolidateRequest(BaseModel):
+    entity_key: str
+    workspace_id: str = "default"
+
+class ConsolidateResponse(BaseModel):
+    status: str
+    canonical_id: Optional[str] = None
+    entity_key: str
+    consolidated_count: int = 0
+    canonical_content: Optional[str] = None
+
+class PruneResponse(BaseModel):
+    pruned_count: int
+    older_than_days: int
+    workspace_id: Optional[str] = None
+    message: str
+

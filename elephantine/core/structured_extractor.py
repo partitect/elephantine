@@ -84,12 +84,21 @@ class StructuredMemoryExtractor:
 
         # 1. Try In-Process GGUF SLM Engine if model file is configured and present
         try:
-            from elephantine.core.gguf_extractor import LlamaCppEngine
-            engine = LlamaCppEngine.get_instance()
-            if engine.is_available:
-                facts = engine.extract_memories(raw_clean)
-                if facts:
-                    return facts
+            from elephantine.core.governor import AdaptiveComputeGovernor
+            if not hasattr(self, "_governor"):
+                self._governor = AdaptiveComputeGovernor()
+
+            if self._governor.should_use_slm(len(raw_clean)):
+                from elephantine.core.gguf_extractor import LlamaCppEngine
+                engine = LlamaCppEngine.get_instance()
+                if engine.is_available:
+                    self._governor.acquire_slm()
+                    try:
+                        facts = engine.extract_memories(raw_clean)
+                        if facts:
+                            return facts
+                    finally:
+                        self._governor.release_slm()
         except Exception:
             pass
 

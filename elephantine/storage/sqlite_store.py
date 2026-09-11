@@ -326,3 +326,93 @@ class SqliteMetadataStore:
             frontier = next_frontier - {entity_norm}
 
         return results
+
+    async def insert_memories_batch(self, items: List[Dict[str, Any]]) -> int:
+        """
+        High-throughput batch insertion inside a single atomic SQLite transaction.
+        Eliminates per-item lock contention under high concurrency.
+        """
+        if not items:
+            return 0
+
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            await db.execute("PRAGMA foreign_keys=ON;")
+            params = []
+            for item in items:
+                created_at = item.get("created_at") or datetime.now(timezone.utc)
+                if isinstance(created_at, datetime):
+                    created_at_str = created_at.isoformat()
+                else:
+                    created_at_str = str(created_at)
+
+                expires_at = item.get("expires_at")
+                expires_at_str = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
+
+                params.append((
+                    item["memory_id"],
+                    item["content"],
+                    item.get("source_agent", "unknown"),
+                    item.get("entity_key"),
+                    item.get("category", "general"),
+                    float(item.get("confidence", 1.0)),
+                    json.dumps(item.get("metadata", {}), ensure_ascii=False),
+                    created_at_str,
+                    created_at_str,
+                    expires_at_str,
+                    item.get("workspace_id", "default"),
+                    float(item.get("role_authority", 0.5))
+                ))
+
+            await db.executemany("""
+                INSERT INTO memories (
+                    id, content, source_agent, entity_key, category, confidence,
+                    metadata_json, created_at, updated_at, expires_at, version, is_active,
+                    workspace_id, role_authority
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
+            """, params)
+            await db.commit()
+            return len(items)
+
+    async def prune_deprecated_memories(
+        self,
+        older_than_days: int = 30,
+        workspace_id: Optional[str] = None
+    ) -> int:
+        """
+        Prunes old, inactive/deprecated memories from the active index to reclaim space
+        and prevent search pollution over long horizons.
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            query = """
+                DELETE FROM memories
+                WHERE is_active = 0
+                  AND datetime(updated_at) < datetime('now', '-' || ? || ' days')
+            """
+            params: List[Any] = [older_than_days]
+            if workspace_id:
+                query += " AND workspace_id = ?"
+                params.append(workspace_id)
+
+            cursor = await db.execute(query, tuple(params))
+            deleted_count = cursor.rowcount
+            await db.commit()
+            return deleted_count
+
+    async def get_active_memories_for_consolidation(
+        self,
+        entity_key: str,
+        workspace_id: str = "default"
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetches active memories for a given entity to consolidate/summarize into a single canonical memory.
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT * FROM memories
+                WHERE entity_key = ? AND workspace_id = ? AND is_active = 1
+                ORDER BY created_at ASC
+            """, (entity_key, workspace_id))
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
