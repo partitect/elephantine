@@ -22,8 +22,8 @@
   <!-- Branding -->
   <text x="96" y="35" class="title">🐘 ELEPHANTINE</text>
   <rect x="240" y="18" width="130" height="22" rx="4" fill="#064e3b" stroke="#10b981" stroke-width="0.8"/>
-  <text x="248" y="33" font-family="ui-monospace, monospace" font-size="10px" fill="#6ee7b7" font-weight="600">CPU-NATIVE MIMARS</text>
-  <text x="385" y="34" class="subtitle">Local-First Cognitive Memory Inspector & amp; Knowledge Graph</text>
+  <text x="248" y="33" font-family="ui-monospace, monospace" font-size="10px" fill="#6ee7b7" font-weight="600">CPU-NATIVE ENGINE</text>
+  <text x="385" y="34" class="subtitle">Local-First Cognitive Memory Inspector &amp; Knowledge Graph</text>
 
   <!-- Pulse Status Indicator -->
   <rect x="1050" y="18" width="125" height="22" rx="4" fill="#10b981" fill-opacity="0.1" stroke="#10b981" stroke-opacity="0.5"/>
@@ -34,7 +34,7 @@
   <g transform="translate(24, 76)">
     <!-- Card 1 -->
     <rect x="0" y="0" width="270" height="92" rx="10" fill="#1e293b" fill-opacity="0.5" stroke="#334155"/>
-    <text x="16" y="25" class="kpi-lbl">TOTAL MEMORIER</text>
+    <text x="16" y="25" class="kpi-lbl">TOTAL MEMORIES</text>
     <text x="16" y="58" class="kpi-val" fill="#ffffff">1,248</text>
     <text x="16" y="79" font-family="system-ui" font-size="11px" fill="#64748b">Persisted across all agents</text>
 
@@ -46,7 +46,7 @@
 
     <!-- Card 3 -->
     <rect x="588" y="0" width="270" height="92" rx="10" fill="#1e293b" fill-opacity="0.5" stroke="#334155"/>
-    <text x="604" y="25" class="kpi-lbl">SOFT-DEPRECATED (LWWF)</text>
+    <text x="604" y="25" class="kpi-lbl">SOFT-DEPRECATED (LWW)</text>
     <text x="604" y="58" class="kpi-val" fill="#fbbf24">144</text>
     <text x="604" y="79" font-family="system-ui" font-size="11px" fill="#64748b">Conflict authority superseded</text>
 
@@ -62,9 +62,9 @@
   <!-- Search & Toolbar -->
   <g transform="translate(24, 184)">
     <rect x="0" y="0" width="1152" height="48" rx="8" fill="#1e293b" fill-opacity="0.7" stroke="#334155"/>
-    <text x="16" y="29" font-family="system-ui" font-size="14px" fill="#94a3b8">🔅 Search by content, entity_key, workspace_id, or authority...</text>
+    <text x="16" y="29" font-family="system-ui" font-size="14px" fill="#94a3b8">Search by content, entity_key, workspace_id, or authority...</text>
     <rect x="960" y="10" width="175" height="28" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="0.8"/>
-    <text x="975" y="28" font-family="ui-monospace, monospace" font-size="11px" fill="#64ff87" font-weight="700">+1 Knowledge Explorer</text>
+    <text x="975" y="28" font-family="ui-monospace, monospace" font-size="11px" fill="#64ff87" font-weight="700">Knowledge Explorer</text>
   </g>
 
 
@@ -76,8 +76,8 @@
     <rect x="0" y="0" width="1152" height="40" rx="10" fill="#1e293b" fill-opacity="0.8"/>
     <text x="20" y="25" class="table-hd">STATUS</text>
     <text x="110" y="25" class="table-hd">ENTITY KEY</text>
-    <text x='290" y="25" class="table-hd">MEMORY CONTENT & amp; FACTS (GGUF VALIDATED)</text>
-    <text x="720" y="25" class="table-hd">WORKSPACE & amp; AGENT</text>
+    <text x="290" y="25" class="table-hd">MEMORY CONTENT &amp; FACTS (GGUF VALIDATED)</text>
+    <text x="720" y="25" class="table-hd">WORKSPACE &amp; AGENT</text>
     <text x="920" y="25" class="table-hd">AUTHORITY</text>
     <text x="1040" y="25" class="table-hd" text-anchor="end">ACTIONS</text>
     <line x1="0" y1="40" x2="1152" y2="40" stroke="#1e293b" stroke-width="1"/>
@@ -97,12 +97,12 @@
     </g>
     <line x1="0" y1="86" x2="1152" y2="86" stroke="#1e293b" stroke-width="0.8"/>
 
-    <!-- Row 2 --->
+    <!-- Row 2 -->
     <g transform="translate(0, 96)">
       <rect x="18" y="0" width="60" height="22" rx="4" fill="#064e3b"/>
       <text x="26" y="15" font-family="ui-monospace" font-size="10px" fill="#34d3b5" font-weight="700">● Active</text>
       <rect x="105" y="0" width="160" height="22" rx="4" fill="#311b92" fill-opacity="0.4"/>
-      <text x="112" y="15" class="code-badge">service:auth_stack,/text>
+      <text x="112" y="15" class="code-badge">service:auth_stack</text>
       <text x="290" y="16" class="table-row">Fixed authentication by adding JWT (sub: auth, obj: jwt)</text>
       <text x="720" y="16" font-family="ui-monospace" font-size="11px" fill="#94a3b8">project-x / coder-agent</text>
       <rect x="920" y="0" width="70" height="22" rx="4" fill="#1e293b"/>
