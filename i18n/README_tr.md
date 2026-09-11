@@ -19,9 +19,11 @@
   <a href="#mimari">Mimari</a> •
   <a href="#hızlı-başlangıç">Hızlı Başlangıç</a> •
   <a href="#çoklu-ajan-ortak-çalışma-alanı">Çoklu Ajan Alanı</a> •
-  <a href="#webui-kontrol-paneli">Dashboard</a> •
-  <a href="#ide--ajan-kurulumu-mcp">Cursor, Codex & Claude</a> •
-  <a href="#python-sdk--langchain-entegrasyonu">Python SDK</a> •
+  <a href="#webui-kontrol-paneli--bilgi-grafiği">Dashboard & Grafik</a> •
+  <a href="#tek-tıkla-ide--ajan-kurulumu-mcp">1-Tıkla IDE Kurulumu</a> •
+  <a href="#terminal-cli-komutları">Terminal CLI</a> •
+  <a href="#sdks--entegrasyonlar">SDK'lar (Python & TS)</a> •
+  <a href="#kurumsal-rbac--güvenlik">Kurumsal RBAC</a> •
   <a href="#performans--kıyaslama-benchmarks">Kıyaslamalar</a>
 </p>
 
@@ -38,7 +40,7 @@
 
 <br/>
 
-<a href="#webui-kontrol-paneli">
+<a href="#webui-kontrol-paneli--bilgi-grafiği">
   <img src="../docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
 </a>
 
@@ -58,11 +60,13 @@ Efsaneye göre filler, değişen çöl kumları arasında onlarca yıl önceki s
 
 - 🏎 **%100 CPU-Native Çalışma**: AVX-512 SIMD thread optimizasyonlu ONNX Runtime ile 2 vCPU sunucularda 35ms altı geri çağırma (recall) gecikmesi. CUDA veya PyTorch yükü yok.
 - 👥 **Çoklu Ajan Ortak Çalışma Alanı**: Ekipler (Coder, Tester, Architect) arasında paylaşımlı hafıza havuzu (`workspace_id`) ve stajyer/küçük ajanların kıdemli mimari kararları ezmesini önleyen **Rol Tabanlı Otorite Konsensüsü** (`role_authority`).
-- 📊 **Dahili WebUI Inspector**: Canlı motor metriklerini, hafıza kayıtlarını, çelişki geçmişini ve bilgi grafiğini gösteren gerçek zamanlı web paneli (`/dashboard`).
+- 📊 **Dahili WebUI Inspector & Bilgi Grafiği**: Canlı motor metriklerini, hafıza defterini ve **Cytoscape.js interaktif bilgi grafiğini** gösteren gerçek zamanlı web paneli (`/dashboard`).
 - 🦙 **Gömülü GGUF SLM Çıkarımı**: Harici LLM sunucusuna gerek kalmadan, gömülü `llama-cpp-python` (`Qwen2.5-0.5B-Instruct`) ile yerel yapısal hafıza çıkarımı.
 - 🕸 **Grafik Bellek (Knowledge Graph)**: Hibrit arama hattına entegre, özne-yüklem-nesne semantik ilişkileri (`/graph/query`).
+- ⚙️ **Prosedürel Bellek & İş Akışı Takibi**: Araç çalıştırma geçmişlerini ve öğrenilen çok adımlı prosedürleri kaydeder (`/procedural/track`).
 - 🔒 **Yerel-Öncelikli & Sıfır Veri Sızıntısı**: Embedded LanceDB (Arrow/C++) vektör deposu + SQLite WAL. Verileriniz asla diskinizden ayrılmaz.
-- 🔌 **Evrensel Ajan Desteği (MCP & REST)**: **OpenAI Codex**, **Cursor Composer**, **GitHub Copilot**, **Windsurf** ve **Claude Desktop** ile tek tıkla doğrudan entegrasyon.
+- 🔌 **Evrensel Ajan Desteği (MCP & REST)**: **Google Antigravity**, **OpenAI Codex**, **Cursor Composer**, **GitHub Copilot**, **Windsurf** ve **Claude Desktop** ile tek komutla otomatik CLI kurulumu.
+- 🛡️ **Kurumsal RBAC & Güvenlik**: Esnek `RoleBasedAuthEngine` ile ayrıntılı rol izinleri (`admin`, `architect`, `editor`, `viewer`) ve API Key / Bearer token doğrulaması.
 
 ---
 
@@ -121,7 +125,63 @@ uv pip install -e ".[dev]"
 elephantine start --port 8765
 ```
 
-Canlı Hafıza Müfettişini (Memory Inspector) görüntülemek için tarayıcınızda [http://localhost:8765/dashboard](http://localhost:8765/dashboard) adresini açın!
+Canlı Hafıza Müfettişini görüntülemek için tarayıcınızda [http://localhost:8765/dashboard](http://localhost:8765/dashboard) adresini açın!
+
+---
+
+<a id="tek-tıkla-ide--ajan-kurulumu-mcp"></a>
+## 🔌 Tek Tıkla IDE & Ajan Kurulumu (MCP)
+
+Elephantine, yerel **Model Context Protocol (MCP)** ve yüksek hızlı REST uç noktalarıyla tüm büyük ortamlara bağlanır.
+
+### ⚡ 1 Saniyede Otomatik CLI Kurulumu
+Elle JSON yapılandırması aramadan tek bir komutla favori ortamınıza kurun:
+
+```bash
+# Google Antigravity (AGY)
+elephantine install-antigravity
+
+# OpenAI Codex & GitHub Copilot
+elephantine install-codex
+
+# Cursor Composer & Editör
+elephantine install-cursor
+
+# Claude Desktop
+elephantine install-claude
+
+# VS Code Çalışma Alanı (.vscode/settings.json)
+elephantine install-vscode
+```
+
+### Manuel Yapılandırma Görüntüleme
+İstediğiniz zaman hazır kopyalanabilir ayarları görüntüleyebilirsiniz:
+```bash
+elephantine config-antigravity
+elephantine config-codex
+elephantine config-cursor
+elephantine config-claude
+```
+
+---
+
+<a id="terminal-cli-komutları"></a>
+## 💻 Doğrudan Terminal CLI Komutları
+
+Kod yazmadan veya web arayüzünü açmadan terminalden doğrudan bellek ekleyin ve arayın:
+
+```bash
+# 1. Belirli bir çalışma alanı ve otorite ile bellek kaydetme
+elephantine remember "PostgreSQL 16 veritabanı pgvector uzantısıyla kullanılmalıdır." \
+  --workspace phoenix-core \
+  --category architecture \
+  --authority 1.0
+
+# 2. Hibrit yoğun + BM25 araması ile çağırma
+elephantine recall "hangi veritabanını kullanıyoruz?" \
+  --workspace phoenix-core \
+  --top-k 3
+```
 
 ---
 
@@ -167,74 +227,28 @@ results = client.recall(
 
 ---
 
-<a id="webui-kontrol-paneli"></a>
-## 🖥️ WebUI Kontrol Paneli (Dashboard)
+<a id="webui-kontrol-paneli--bilgi-grafiği"></a>
+## 🖥️ WebUI Kontrol Paneli & İnteraktif Bilgi Grafiği
 
-Elephantine, `http://localhost:8765/dashboard` adresinde çalışan yerleşik, hafif bir Hafıza Müfettişi içerir:
+Elephantine, `http://localhost:8765/dashboard` adresinde çalışan yerleşik bir Hafıza Müfettişi içerir:
 
 - **Gerçek Zamanlı Bellek Defteri**: Aktif ve kullanımdan kaldırılmış (deprecated) kayıtları, revizyon sayılarını inceleyin.
+- **🕸 İnteraktif Bilgi Grafiği (Cytoscape.js)**: Çıkarılan semantik varlıkları ve özne-yüklem-nesne üçlülerini kuvvet odaklı (CoSE), dairesel ve eşmerkezli ağlar halinde canlı gezin.
+- **Canlı İnceleme**: Herhangi bir düğüme veya ilişki okuna tıklayarak güven skorunu, kaynak bellek ayrıntılarını canlı görüntüleyin.
 - **Otorite ve Çelişki Takibi**: Rol tabanlı değişiklikleri ve LWW (Son-Yazan-Kazanır) zincirlerini izleyin.
-- **Bilgi Grafiği Görüntüleyici**: Çıkarılan özne-yüklem-nesne ilişki üçlülerini gezin.
-- **Canlı Arama ve Filtreleme**: Hibrit yoğun (dense) + BM25 aramalarını etkileşimli olarak test edin.
 
 ---
 
-<a id="ide--ajan-kurulumu-mcp"></a>
-## 🔌 Cursor, OpenAI Codex & Claude Desktop Kurulumu
+<a id="sdks--entegrasyonlar"></a>
+## 💻 SDK'lar & Entegrasyonlar
 
-Elephantine, yerel **Model Context Protocol (MCP)** ve yüksek hızlı yerel REST uç noktaları aracılığıyla tüm büyük IDE'lere ve masaüstü yapay zekâ istemcilerine bağlanır.
-
-### 1. OpenAI Codex & GitHub Copilot (VS Code)
-VS Code ve OpenAI Codex destekli ortamlar için:
-1. Kopyalamaya hazır ayarları görmek için `elephantine config-codex` komutunu çalıştırın.
-2. `.vscode/settings.json` dosyanıza (veya MCP yapılandırmanıza) ekleyin:
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-*Veya doğrudan Codex/Copilot betiklerinizden `http://127.0.0.1:8765/recall` REST API'sini çağırın.*
-
-### 2. Cursor Kurulumu
-1. **Cursor Settings** -> **Features** -> **MCP Servers** -> **Add New MCP Server** yolunu izleyin.
-2. Bilgileri girin:
-   - **Name**: `elephantine`
-   - **Type**: `command`
-   - **Command**: `elephantine mcp`
-
-### 3. Claude Desktop Kurulumu
-`elephantine config-claude` komutunu çalıştırın veya `claude_desktop_config.json` dosyanıza ekleyin:
-
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
----
-
-<a id="python-sdk--langchain-entegrasyonu"></a>
-## 💻 Python SDK & LangChain Entegrasyonu
-
-Elephantine, senkron ve asenkron istemcilerin yanı sıra yerel LangChain hafıza adaptörü sunar:
-
+### 1. Python SDK & LangChain Entegrasyonu
 ```python
 import asyncio
 from elephantine.client import AsyncElephantineClient, ElephantineLangChainMemory
 
 async def main():
     async with AsyncElephantineClient("http://127.0.0.1:8765") as client:
-        # Semantik varlık hizalaması ile kaydetme
         await client.remember(
             content="Kullanıcı asenkron test çalıştırıcıları ile pytest tercih ediyor.",
             category="preference",
@@ -243,7 +257,6 @@ async def main():
             role_authority=0.8
         )
 
-        # Zaman sönümlemesi ve çalışma alanı filtrelemesi ile çağırma
         res = await client.recall(
             query="test çalıştırıcı tercihleri",
             workspace_id="dev-team",
@@ -261,6 +274,47 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+### 2. TypeScript / Node.js SDK (`@elephantine/sdk`)
+`sdks/typescript/` dizininde hazır bulunmaktadır:
+
+```typescript
+import { ElephantineClient } from '@elephantine/sdk';
+
+const client = new ElephantineClient('http://127.0.0.1:8765');
+
+// Belleğe kaydetme
+await client.remember({
+  content: 'Canlı dağıtımlar Salı günleri saat 10:00 UTC yapılacaktır.',
+  category: 'devops',
+  workspaceId: 'infra-team',
+  roleAuthority: 0.9
+});
+
+// Bellekten çağırma
+const res = await client.recall({
+  query: 'dağıtım takvimi',
+  workspaceId: 'infra-team'
+});
+console.log(res.memories);
+```
+
+---
+
+<a id="kurumsal-rbac--güvenlik"></a>
+## 🛡️ Kurumsal RBAC & Güvenlik
+
+Çok kullanıcılı ekipler ve kurumsal ortamlar için modüler Rol Tabanlı Erişim Kontrolü:
+
+* **Tanımlı Roller**:
+  - `admin`: Tam sınırsız erişim (`read`, `write`, `delete`, `admin`).
+  - `architect`: Tüm kategorilerde okuma, yazma ve silme.
+  - `editor`: Bellek okuma ve yazma.
+  - `viewer`: Salt-okunur (read-only) çağırma erişimi. Yazma ve silme denemeleri HTTP 403 Forbidden ile engellenir.
+* **Token Kimlik Doğrulaması**:
+  - `ELEPHANTINE_AUTH_ENABLED=true` ile aktif edilir.
+  - İstekler `X-API-Key: <key>` veya `Authorization: Bearer <key>` başlığıyla doğrulanır.
+  - Varsayılan Topluluk modu (`AUTH_ENABLED=false`) sıfır konfigürasyon ile tam yerel hızda çalışır.
 
 ---
 
@@ -290,7 +344,9 @@ Standart **Ubuntu 24.04 VDS (2 vCPU / 4 GB RAM, GPU Yok)** üzerinde test edilmi
 - [x] **v0.2.5**: Grafik Bellek & Varlık Üçlüsü Çıkarımı (`/graph/query`).
 - [x] **v0.3.0**: Hafif WebUI Hafıza Müfettişi & Zaman Yolculuğu Grafik Görselleştiricisi.
 - [x] **v0.3.5**: Çoklu Ajan Ortak Çalışma Alanı & Rol Tabanlı Otorite Konsensüsü (`workspace_id`, `role_authority`).
-- [ ] **v1.0.0**: Kurumsal Çok Kiracılı RBAC & Ajanlar Arası CRDT Konsensüsü.
+- [x] **v0.3.8**: 1-Tıkla IDE Kurulumu (Antigravity, Codex, Cursor, Claude, VS Code) & Cytoscape.js İnteraktif Grafik.
+- [x] **v0.4.0**: TypeScript / Node.js SDK & Kurumsal RBAC Güvenlik Katmanı.
+- [ ] **v1.0.0**: Ajanlar Arası CRDT Dağıtık Konsensüsü & Çok Düğümlü Senkronizasyon.
 
 ---
 

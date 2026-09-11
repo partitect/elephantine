@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "elephantine": {
+      "command": "E:\\memagent\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "elephantine.mcp.server"
+      ]
+    }
+  }
+}

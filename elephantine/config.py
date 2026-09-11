@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     HYBRID_RRF_K: int = 60            # Reciprocal Rank Fusion constant
     SEMANTIC_SIMILARITY_THRESHOLD: float = 0.78  # Conflict detection cutoff
 
+    # Enterprise & RBAC Settings
+    AUTH_ENABLED: bool = False
+    API_KEYS_JSON: str = "{}"
+
+
     @property
     def sqlite_path(self) -> Path:
         return self.BASE_DATA_DIR / self.SQLITE_DB_NAME

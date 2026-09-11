@@ -12,3 +12,6 @@ build/
 dist/
 scripts/gen*
 scripts/build*
+node_modules/
+sdks/**/node_modules/
+

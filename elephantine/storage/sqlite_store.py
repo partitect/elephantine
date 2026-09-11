@@ -447,3 +447,35 @@ class SqliteMetadataStore:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
+    async def get_all_graph_triplets(
+        self,
+        workspace_id: Optional[str] = None,
+        limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves graph triplets, optionally filtered by workspace_id of the source memory.
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            if workspace_id:
+                cursor = await db.execute("""
+                    SELECT gt.id, gt.subject, gt.predicate, gt.object, gt.source_memory_id, gt.confidence, gt.created_at, m.workspace_id
+                    FROM graph_triplets gt
+                    LEFT JOIN memories m ON gt.source_memory_id = m.id
+                    WHERE gt.is_active = 1 AND (m.workspace_id = ? OR m.workspace_id IS NULL)
+                    ORDER BY gt.created_at DESC
+                    LIMIT ?
+                """, (workspace_id, limit))
+            else:
+                cursor = await db.execute("""
+                    SELECT gt.id, gt.subject, gt.predicate, gt.object, gt.source_memory_id, gt.confidence, gt.created_at, m.workspace_id
+                    FROM graph_triplets gt
+                    LEFT JOIN memories m ON gt.source_memory_id = m.id
+                    WHERE gt.is_active = 1
+                    ORDER BY gt.created_at DESC
+                    LIMIT ?
+                """, (limit,))
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+

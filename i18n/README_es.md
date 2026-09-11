@@ -19,9 +19,11 @@
   <a href="#arquitectura">Arquitectura</a> •
   <a href="#inicio-rápido">Inicio Rápido</a> •
   <a href="#espacio-de-trabajo-multi-agente">Espacio Multi-Agente</a> •
-  <a href="#panel-webui-dashboard">Dashboard</a> •
-  <a href="#configuración-mcp-cursor-codex-y-claude">Cursor, Codex & Claude</a> •
-  <a href="#python-sdk-e-integración-con-langchain">Python SDK</a> •
+  <a href="#panel-webui--grafo-de-conocimiento">Dashboard & Grafo</a> •
+  <a href="#instalación-ide-en-1-clic-mcp">Instalación 1-Clic</a> •
+  <a href="#comandos-cli-de-terminal">Terminal CLI</a> •
+  <a href="#sdks-e-integraciones">SDKs (Python & TS)</a> •
+  <a href="#rbac-empresarial-y-seguridad">RBAC Empresarial</a> •
   <a href="#rendimiento-y-benchmarks">Benchmarks</a>
 </p>
 
@@ -38,7 +40,7 @@
 
 <br/>
 
-<a href="#panel-webui-dashboard">
+<a href="#panel-webui--grafo-de-conocimiento">
   <img src="../docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
 </a>
 
@@ -58,11 +60,13 @@ La leyenda cuenta que los elefantes recuerdan los pozos de agua a través de dé
 
 - 🏎 **Ejecución 100% Nativa en CPU**: Latencia de recuperación (recall) inferior a 35ms en servidores de 2 vCPU gracias a ONNX Runtime y optimización AVX-512 SIMD. Sin CUDA ni el peso de PyTorch.
 - 👥 **Espacio de Trabajo Multi-Agente Compartido**: Agrupación fluida de memoria (`workspace_id`) entre equipos (Desarrollador, Tester, Arquitecto) con **Consenso de Autoridad Basado en Roles** (`role_authority`) que impide que agentes junior sobrescriban decisiones arquitectónicas críticas.
-- 📊 **Panel WebUI Integrado**: Panel de control interactivo en tiempo real (`/dashboard`) que muestra métricas del motor, registros de memoria, historial de conflictos y grafos de conocimiento.
+- 📊 **Panel WebUI Integrado & Grafo Interactivo**: Panel de control interactivo (`/dashboard`) con registro de memorias y visor de grafos de conocimiento basado en **Cytoscape.js**.
 - 🦙 **Extracción GGUF SLM en Proceso**: Extracción estructurada de memoria mediante `llama-cpp-python` (`Qwen2.5-0.5B-Instruct`) local, sin necesidad de servidores LLM externos.
 - 🕸 **Memoria en Grafo y Tripletas de Conocimiento**: Grafos semánticos nativos sujeto-predicado-objeto (`/graph/query`) integrados directamente en el flujo de recuperación híbrida.
+- ⚙️ **Memoria Procedimental y Seguimiento de Flujos**: Registra ejecuciones de herramientas y secuencias de pasos aprendidas (`/procedural/track`).
 - 🔒 **Local Primero y Cero Fugas**: Base vectorial LanceDB (Arrow/C++) embebida + SQLite WAL. Tus datos nunca abandonan tu máquina anfitriona.
-- 🔌 **Compatibilidad Universal con Agentes (MCP & REST)**: Conexión nativa con **OpenAI Codex**, **Cursor Composer**, **GitHub Copilot**, **Windsurf** y **Claude Desktop** sin fricción de configuración.
+- 🔌 **Compatibilidad Universal con Agentes (MCP & REST)**: Conexión nativa con **Google Antigravity**, **OpenAI Codex**, **Cursor Composer**, **GitHub Copilot**, **Windsurf** y **Claude Desktop** con instaladores CLI en un clic.
+- 🛡️ **RBAC Empresarial y Seguridad**: Motor `RoleBasedAuthEngine` con permisos por roles (`admin`, `architect`, `editor`, `viewer`) y autenticación por API Key o Bearer tokens.
 
 ---
 
@@ -125,6 +129,62 @@ elephantine start --port 8765
 
 ---
 
+<a id="instalación-ide-en-1-clic-mcp"></a>
+## 🔌 Instalación IDE en 1-Clic (MCP)
+
+Elephantine se conecta a los principales entornos mediante el protocolo nativo **Model Context Protocol (MCP)**:
+
+### ⚡ Instaladores Automáticos CLI en 1 Segundo
+Configura tu entorno preferido sin editar archivos JSON manualmente:
+
+```bash
+# Google Antigravity (AGY)
+elephantine install-antigravity
+
+# OpenAI Codex & GitHub Copilot
+elephantine install-codex
+
+# Cursor Composer & Editor
+elephantine install-cursor
+
+# Claude Desktop
+elephantine install-claude
+
+# Espacio de Trabajo VS Code (.vscode/settings.json)
+elephantine install-vscode
+```
+
+### Configuración Manual
+También puedes visualizar las configuraciones listas para pegar:
+```bash
+elephantine config-antigravity
+elephantine config-codex
+elephantine config-cursor
+elephantine config-claude
+```
+
+---
+
+<a id="comandos-cli-de-terminal"></a>
+## 💻 Comandos CLI de Terminal
+
+Registra y recupera recuerdos directamente desde tu terminal sin abrir interfaces web:
+
+```bash
+# 1. Recordar un dato con espacio de trabajo y autoridad
+elephantine remember "La base de datos debe ser PostgreSQL 16 con pgvector." \
+  --workspace phoenix-core \
+  --category architecture \
+  --authority 1.0
+
+# 2. Recuperar recuerdos con búsqueda híbrida
+elephantine recall "¿Qué motor de base de datos usamos?" \
+  --workspace phoenix-core \
+  --top-k 3
+```
+
+---
+
 <a id="espacio-de-trabajo-multi-agente"></a>
 ## 👥 Espacio de Trabajo Multi-Agente Compartido
 
@@ -167,83 +227,36 @@ results = client.recall(
 
 ---
 
-<a id="panel-webui-dashboard"></a>
-## 🖥️ Panel WebUI (Dashboard)
+<a id="panel-webui--grafo-de-conocimiento"></a>
+## 🖥️ Panel WebUI & Grafo de Conocimiento Interactivo
 
-Elephantine incluye un Inspector de Memoria integrado y ligero disponible en `http://localhost:8765/dashboard`:
+Elephantine incluye un Inspector de Memoria ligero en `http://localhost:8765/dashboard`:
 
 - **Registro de Memoria en Tiempo Real**: Inspecciona memorias activas y obsoletas (deprecated), revisa números de versión y estados sustituidos.
-- **Seguimiento de Autoridad y Conflictos**: Monitorea modificaciones basadas en roles y cadenas de obsolescencia LWW (Last-Write-Wins).
-- **Visor de Grafos de Conocimiento**: Explora relaciones tripletas sujeto-predicado-objeto extraídas.
-- **Búsqueda y Filtrado en Vivo**: Prueba búsquedas híbridas densas + BM25 de manera interactiva.
+- **🕸 Grafo Interactivo (Cytoscape.js)**: Explora relaciones tripletas sujeto-predicado-objeto con distribuciones de fuerza (CoSE), circulares y concéntricas.
+- **Inspección al Tocar**: Haz clic en cualquier nodo o relación para examinar métricas de confianza y memorias de origen.
+- **Seguimiento de Autoridad y Conflictos**: Monitorea modificaciones basadas en roles y cadenas de obsolescencia LWW.
 
 ---
 
-<a id="configuración-mcp-cursor-codex-y-claude"></a>
-## 🔌 Configuración en Cursor, OpenAI Codex y Claude Desktop
+<a id="sdks-e-integraciones"></a>
+## 💻 SDKs e Integraciones
 
-Elephantine se conecta a los principales IDEs y clientes de escritorio de IA a través del protocolo nativo **Model Context Protocol (MCP)** y endpoints REST locales de alta velocidad.
-
-### 1. OpenAI Codex & GitHub Copilot (VS Code)
-Para flujos de trabajo de agentes en VS Code y entornos basados en Codex:
-1. Ejecuta `elephantine config-codex` para ver la configuración lista para copiar.
-2. En tu archivo `.vscode/settings.json` (o configuración MCP):
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-*O llama directamente a la API REST local desde tus scripts en `http://127.0.0.1:8765/recall`.*
-
-### 2. Configuración en Cursor
-1. Abre **Cursor Settings** -> **Features** -> **MCP Servers** -> **Add New MCP Server**.
-2. Completa:
-   - **Name**: `elephantine`
-   - **Type**: `command`
-   - **Command**: `elephantine mcp`
-
-### 3. Configuración en Claude Desktop
-Ejecuta `elephantine config-claude` o añade esto a tu archivo `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
----
-
-<a id="python-sdk-e-integración-con-langchain"></a>
-## 💻 Python SDK e Integración con LangChain
-
-Elephantine ofrece clientes síncronos y asíncronos junto con un adaptador de memoria para LangChain:
-
+### 1. Python SDK & Integración con LangChain
 ```python
 import asyncio
 from elephantine.client import AsyncElephantineClient, ElephantineLangChainMemory
 
 async def main():
     async with AsyncElephantineClient("http://127.0.0.1:8765") as client:
-        # Recordar con alineación de entidad semántica
         await client.remember(
-            content="El usuario prefiere pytest con ejecutores de pruebas asíncronos.",
+            content="El usuario prefiere pytest con ejecutores asíncronos.",
             category="preference",
             entity_key="dev:test_runner",
             workspace_id="dev-team",
             role_authority=0.8
         )
 
-        # Recuperar memorias con decaimiento temporal y filtrado por espacio
         res = await client.recall(
             query="preferencias de ejecutor de pruebas",
             workspace_id="dev-team",
@@ -261,6 +274,47 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+### 2. TypeScript / Node.js SDK (`@elephantine/sdk`)
+Disponible en `sdks/typescript/`:
+
+```typescript
+import { ElephantineClient } from '@elephantine/sdk';
+
+const client = new ElephantineClient('http://127.0.0.1:8765');
+
+// Almacenar memoria
+await client.remember({
+  content: 'Los despliegues a producción se realizan los martes a las 10:00 UTC.',
+  category: 'devops',
+  workspaceId: 'infra-team',
+  roleAuthority: 0.9
+});
+
+// Recuperar memoria
+const res = await client.recall({
+  query: 'horario de despliegues',
+  workspaceId: 'infra-team'
+});
+console.log(res.memories);
+```
+
+---
+
+<a id="rbac-empresarial-y-seguridad"></a>
+## 🛡️ RBAC Empresarial y Seguridad
+
+Para equipos multiusuario y entornos empresariales:
+
+* **Roles Predefinidos**:
+  - `admin`: Acceso total sin restricciones (`read`, `write`, `delete`, `admin`).
+  - `architect`: Lectura, escritura y borrado en todas las categorías.
+  - `editor`: Lectura y escritura de memorias activas.
+  - `viewer`: Acceso de solo lectura. Las escrituras son rechazadas con HTTP 403 Forbidden.
+* **Autenticación por Token**:
+  - Habilitar con `ELEPHANTINE_AUTH_ENABLED=true`.
+  - Validación vía cabecera `X-API-Key: <clave>` o `Authorization: Bearer <clave>`.
+  - El modo Community predeterminado (`AUTH_ENABLED=false`) funciona sin configuración y a máxima velocidad local.
 
 ---
 
@@ -290,7 +344,9 @@ Probado en un servidor estándar **Ubuntu 24.04 VDS (2 vCPU / 4 GB RAM, Sin GPU)
 - [x] **v0.2.5**: Memoria en Grafo y Extracción de Tripletas (`/graph/query`).
 - [x] **v0.3.0**: Inspector de Memoria WebUI ligero y Visualizador de Grafos con Viaje Temporal.
 - [x] **v0.3.5**: Espacio de Trabajo Multi-Agente y Consenso de Autoridad Basado en Roles (`workspace_id`, `role_authority`).
-- [ ] **v1.0.0**: RBAC Empresarial Multi-Tenant y Consenso Distribuido CRDT.
+- [x] **v0.3.8**: Instaladores IDE en 1-clic (Antigravity, Codex, Cursor, Claude, VS Code) y grafo interactivo Cytoscape.js.
+- [x] **v0.4.0**: TypeScript / Node.js SDK y capa de seguridad RBAC empresarial.
+- [ ] **v1.0.0**: Consenso distribuido CRDT entre agentes y sincronización multi-nodo.
 
 ---
 

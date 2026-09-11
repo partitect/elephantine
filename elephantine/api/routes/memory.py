@@ -28,6 +28,9 @@ from elephantine.core.scoring import HybridScorer
 from elephantine.core.conflict import ConflictResolver
 from elephantine.storage.sqlite_store import SqliteMetadataStore
 from elephantine.storage.lancedb_store import LanceDbVectorStore
+from elephantine.core.auth_interface import TenantContext
+from elephantine.api.middleware.auth import require_write_permission, require_read_permission
+
 from elephantine.storage.procedural_store import ProceduralMemoryStore
 from elephantine.core.buffer import AsyncMemoryWriteBuffer
 from elephantine.core.consolidator import MemoryConsolidator
@@ -59,7 +62,8 @@ def get_container() -> ServiceContainer:
 @router.post("/remember", response_model=RememberResponse)
 async def remember_endpoint(
     req: RememberRequest,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     """
     1. Pre-filter / Heuristic Extraction.
@@ -138,7 +142,8 @@ async def remember_endpoint(
 @router.post("/recall", response_model=RecallResponse)
 async def recall_endpoint(
     req: RecallRequest,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     """
     1. Dense Vector search via LanceDB.

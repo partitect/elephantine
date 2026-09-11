@@ -19,9 +19,11 @@
   <a href="#系统架构">架构</a> •
   <a href="#快速上手">快速上手</a> •
   <a href="#多智能体共享工作区">多智能体工作区</a> •
-  <a href="#webui-控制面板">控制面板</a> •
-  <a href="#ide--智能体配置-mcp">Cursor, Codex & Claude</a> •
-  <a href="#python-sdk--langchain-集成">Python SDK</a> •
+  <a href="#webui-控制面板--知识图谱">控制面板 & 图谱</a> •
+  <a href="#一键式-ide--智能体配置-mcp">一键 IDE 配置</a> •
+  <a href="#终端-cli-命令">终端 CLI</a> •
+  <a href="#多语言-sdk-支持">SDK (Python & TS)</a> •
+  <a href="#企业级-rbac--安全认证">企业级 RBAC</a> •
   <a href="#基准测试与性能-benchmarks">性能基准</a>
 </p>
 
@@ -38,7 +40,7 @@
 
 <br/>
 
-<a href="#webui-控制面板">
+<a href="#webui-控制面板--知识图谱">
   <img src="../docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
 </a>
 
@@ -58,11 +60,13 @@
 
 - 🏎 **100% CPU 原生执行**：基于 ONNX Runtime 及 AVX-512 SIMD 线程绑定优化，在 2 vCPU 服务器上实现低于 35ms 的召回延迟。无需 CUDA，无臃肿 PyTorch 依赖。
 - 👥 **多智能体共享工作区**：跨团队（Coder、Tester、Architect）无缝共享记忆池（`workspace_id`），并通过**基于角色的权限共识**（`role_authority`）防止初级智能体篡改资深架构师的关键决策。
-- 📊 **内置 WebUI 检查器**：实时交互式控制面板（`/dashboard`），展现引擎核心 KPI、记忆台账、冲突演进历史及实体关系图谱。
+- 📊 **内置 WebUI 检查器 & 交互式知识图谱**：实时交互式控制面板（`/dashboard`），展现引擎核心 KPI、记忆台账以及基于 **Cytoscape.js** 的关系图谱可视化画布。
 - 🦙 **进程内 GGUF SLM 提取**：内置轻量级 `llama-cpp-python`（`Qwen2.5-0.5B-Instruct`），纯本地实现结构化实体提取，无需运行独立后台大模型服务。
 - 🕸 **图记忆与知识三元组**：原生主-谓-宾语义知识图谱（`/graph/query`），无缝整合进混合检索流程。
+- ⚙️ **程序化记忆与工作流追踪**：记录工具调用历史及沉淀多步骤执行流程（`/procedural/track`）。
 - 🔒 **本地优先与零泄漏**：嵌入式 LanceDB（Arrow/C++）向量引擎 + SQLite WAL 日志。数据永远保留在您的本地文件系统。
-- 🔌 **通用智能体协议支持（MCP & REST）**：开箱即用支持 **OpenAI Codex**、**Cursor Composer**、**GitHub Copilot**、**Windsurf** 和 **Claude Desktop**。
+- 🔌 **通用智能体协议支持（MCP & REST）**：原生支持 **Google Antigravity**、**OpenAI Codex**、**Cursor Composer**、**GitHub Copilot**、**Windsurf** 和 **Claude Desktop**，提供一键自动 CLI 配置。
+- 🛡️ **企业级 RBAC 与安全认证**：可配置的 `RoleBasedAuthEngine`，提供多级角色权限（`admin`, `architect`, `editor`, `viewer`）与 API Key / Bearer 鉴权支持。
 
 ---
 
@@ -125,6 +129,62 @@ elephantine start --port 8765
 
 ---
 
+<a id="一键式-ide--智能体配置-mcp"></a>
+## 🔌 一键式 IDE & 智能体配置 (MCP)
+
+Elephantine 通过原生 **Model Context Protocol (MCP)** 无缝对接主流开发工具：
+
+### ⚡ 1 秒极速 CLI 自动安装
+无需手动寻找和编辑 JSON 文件，一键完成配置：
+
+```bash
+# Google Antigravity (AGY)
+elephantine install-antigravity
+
+# OpenAI Codex & GitHub Copilot
+elephantine install-codex
+
+# Cursor Composer & Editor
+elephantine install-cursor
+
+# Claude Desktop
+elephantine install-claude
+
+# VS Code 项目工作区 (.vscode/settings.json)
+elephantine install-vscode
+```
+
+### 手动查看配置
+亦可随时查看可供直接复制的配置内容：
+```bash
+elephantine config-antigravity
+elephantine config-codex
+elephantine config-cursor
+elephantine config-claude
+```
+
+---
+
+<a id="终端-cli-命令"></a>
+## 💻 终端直接执行 CLI 命令
+
+无需编写代码或打开浏览器，直接在终端中记录与检索记忆：
+
+```bash
+# 1. 记录记忆（指定工作区与权威权重）
+elephantine remember "数据库必须严格采用安装了 pgvector 扩展的 PostgreSQL 16。" \
+  --workspace phoenix-core \
+  --category architecture \
+  --authority 1.0
+
+# 2. 混合检索召回记忆
+elephantine recall "我们采用哪种数据库引擎？" \
+  --workspace phoenix-core \
+  --top-k 3
+```
+
+---
+
 <a id="多智能体共享工作区"></a>
 ## 👥 多智能体共享工作区
 
@@ -167,74 +227,28 @@ results = client.recall(
 
 ---
 
-<a id="webui-控制面板"></a>
-## 🖥️ WebUI 控制面板
+<a id="webui-控制面板--知识图谱"></a>
+## 🖥️ WebUI 控制面板 & 交互式知识图谱
 
-Elephantine 内置轻量级记忆检查器，访问地址为 `http://localhost:8765/dashboard`：
+访问 `http://localhost:8765/dashboard` 即可体验轻量级记忆检查器：
 
 - **实时记忆台账**：审查活跃与已弃用记忆，查看版本迭代计数与覆盖状态。
+- **🕸 交互式知识图谱 (Cytoscape.js)**：提供力导向（CoSE）、圆形与同心圆布局，交互式展现抽取出的实体三元组网络。
+- **点击穿透详情**：轻触任一节点或连线关系，侧边栏即刻呈现关联上下文与置信度。
 - **权限与冲突追踪**：监控基于角色的修改记录及 LWW（最后写入胜出）弃用链。
-- **知识图谱查看器**：交互式浏览抽取出的主-谓-宾关联三元组。
-- **实时搜索与筛选**：交互式测试稠密向量 + BM25 混合检索效果。
 
 ---
 
-<a id="ide--智能体配置-mcp"></a>
-## 🔌 Cursor, OpenAI Codex & Claude Desktop 配置
+<a id="多语言-sdk-支持"></a>
+## 💻 多语言 SDK 支持
 
-Elephantine 通过原生 **Model Context Protocol (MCP)** 和高速本地 REST 端点，无缝对接各类智能体 IDE 与桌面 AI 工具。
-
-### 1. OpenAI Codex & GitHub Copilot (VS Code)
-针对 VS Code 智能体工作流及 Codex 环境：
-1. 运行 `elephantine config-codex` 查看配置信息。
-2. 在 `.vscode/settings.json`（或 MCP 配置文件）中添加：
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-*或直接在脚本中调用本地 REST 检索端点：`http://127.0.0.1:8765/recall`。*
-
-### 2. Cursor 配置
-1. 打开 **Cursor Settings** -> **Features** -> **MCP Servers** -> **Add New MCP Server**。
-2. 填写信息：
-   - **Name**: `elephantine`
-   - **Type**: `command`
-   - **Command**: `elephantine mcp`
-
-### 3. Claude Desktop 配置
-运行 `elephantine config-claude` 或在 `claude_desktop_config.json` 中添加：
-
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
----
-
-<a id="python-sdk--langchain-集成"></a>
-## 💻 Python SDK & LangChain 集成
-
-Elephantine 提供同步与异步客户端，并原生集成 LangChain 记忆组件：
-
+### 1. Python SDK & LangChain 集成
 ```python
 import asyncio
 from elephantine.client import AsyncElephantineClient, ElephantineLangChainMemory
 
 async def main():
     async with AsyncElephantineClient("http://127.0.0.1:8765") as client:
-        # 记录记忆并对齐语义实体
         await client.remember(
             content="用户偏好使用带有异步执行器的 pytest 进行测试。",
             category="preference",
@@ -243,7 +257,6 @@ async def main():
             role_authority=0.8
         )
 
-        # 调取记忆（支持时间衰减与工作区隔离）
         res = await client.recall(
             query="测试运行器偏好",
             workspace_id="dev-team",
@@ -261,6 +274,47 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+### 2. TypeScript / Node.js SDK (`@elephantine/sdk`)
+位于 `sdks/typescript/` 目录：
+
+```typescript
+import { ElephantineClient } from '@elephantine/sdk';
+
+const client = new ElephantineClient('http://127.0.0.1:8765');
+
+// 存储记忆
+await client.remember({
+  content: '生产环境发布时间固定在每周二 10:00 UTC。',
+  category: 'devops',
+  workspaceId: 'infra-team',
+  roleAuthority: 0.9
+});
+
+// 召回记忆
+const res = await client.recall({
+  query: '发布时间安排',
+  workspaceId: 'infra-team'
+});
+console.log(res.memories);
+```
+
+---
+
+<a id="企业级-rbac--安全认证"></a>
+## 🛡️ 企业级 RBAC 与安全认证
+
+针对多团队协作与生产环境部署，Elephantine 提供模块化权限控制体系：
+
+* **预设角色**：
+  - `admin`：完全无限制权限（`read`, `write`, `delete`, `admin`）。
+  - `architect`：可在全部类别中执行读取、写入和删除。
+  - `editor`：可读写活跃记忆。
+  - `viewer`：只读召回权限。写入和删除操作将被拦截并返回 HTTP 403 Forbidden。
+* **Token 令牌认证**：
+  - 环境变量设置 `ELEPHANTINE_AUTH_ENABLED=true` 启用。
+  - 支持 `X-API-Key: <key>` 标头及 `Authorization: Bearer <key>` 访问。
+  - 默认社区模式（`AUTH_ENABLED=false`）零配置运行，即启即用。
 
 ---
 
@@ -290,7 +344,9 @@ if __name__ == "__main__":
 - [x] **v0.2.5**: 图记忆与实体三元组提取（`/graph/query`）。
 - [x] **v0.3.0**: 轻量级 WebUI 记忆检查器与时间旅行图可视化工具。
 - [x] **v0.3.5**: 多智能体共享工作区与基于角色的权限共识（`workspace_id`, `role_authority`）。
-- [ ] **v1.0.0**: 企业级多租户 RBAC 与跨智能体 CRDT 分布式共识。
+- [x] **v0.3.8**: 一键 IDE 安装器（Antigravity, Codex, Cursor, Claude, VS Code）与 Cytoscape.js 图谱可视化。
+- [x] **v0.4.0**: TypeScript / Node.js SDK 与企业级 RBAC 安全鉴权体系。
+- [ ] **v1.0.0**: 跨智能体 CRDT 分布式共识与多节点集群同步。
 
 ---
 

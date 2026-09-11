@@ -1,7 +1,22 @@
 {
   "name": "@elephantine/sdk",
   "version": "0.3.5",
+  "description": "TypeScript / JavaScript Client SDK for Elephantine CPU-Native Memory Layer",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "keywords": [
+    "elephantine",
+    "ai",
+    "agent-memory",
+    "sdk",
+    "mcp"
+  ],
+  "author": "Partitect Team",
   "license": "Apache-2.0"
 }

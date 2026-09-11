@@ -19,9 +19,11 @@
   <a href="#アーキテクチャ">アーキテクチャ</a> •
   <a href="#クイックスタート">クイックスタート</a> •
   <a href="#マルチエージェント共有ワークスペース">共有ワークスペース</a> •
-  <a href="#webui-ダッシュボード">ダッシュボード</a> •
-  <a href="#ide--エージェント設定-mcp">Cursor, Codex & Claude</a> •
-  <a href="#python-sdk--langchain-統合">Python SDK</a> •
+  <a href="#webui-ダッシュボード--ナレッジグラフ">ダッシュボード & グラフ</a> •
+  <a href="#1クリック-ide-環境設定-mcp">1クリック IDE 設定</a> •
+  <a href="#ターミナル-cli-コマンド">ターミナル CLI</a> •
+  <a href="#各言語-sdk-python--ts">SDK (Python & TS)</a> •
+  <a href="#エンタープライズ-rbac--セキュリティ">エンタープライズ RBAC</a> •
   <a href="#ベンチマークと性能評価-benchmarks">ベンチマーク</a>
 </p>
 
@@ -38,7 +40,7 @@
 
 <br/>
 
-<a href="#webui-ダッシュボード">
+<a href="#webui-ダッシュボード--ナレッジグラフ">
   <img src="../docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
 </a>
 
@@ -58,11 +60,13 @@
 
 - 🏎 **100% CPUネイティブ実行**: ONNX Runtime と AVX-512 SIMD スレッド最適化により、2 vCPU サーバー環境で 35ms 未満のリコールレイテンシを実現。CUDA不要、重厚な PyTorch 依存もありません。
 - 👥 **マルチエージェント共有ワークスペース**: 開発チーム（Coder、Tester、Architect）間でメモリプール（`workspace_id`）をシームレスに共有。**ロールベース権限コンセンサス**（`role_authority`）により、ジュニアエージェントがシニアアーキテクトの設計判断を誤って上書きすることを防止します。
-- 📊 **組み込み WebUI インスペクター**: リアルタイムダッシュボード（`/dashboard`）により、エンジンKPI、記憶台帳、衝突履歴、ナレッジグラフの関係性を可視化。
+- 📊 **組み込み WebUI & インタラクティブ・ナレッジグラフ**: リアルタイムダッシュボード（`/dashboard`）により、記憶台帳と **Cytoscape.js** による関係グラフの可視化ネットワークを操作可能。
 - 🦙 **インプロセス GGUF SLM 抽出**: 外部LLMサーバーを立てることなく、組み込み `llama-cpp-python`（`Qwen2.5-0.5B-Instruct`）によりローカルで構造化エンティティ抽出を実行。
 - 🕸 **グラフメモリと知識トリプレット**: 主語-述語-目的語の意味的知識グラフ（`/graph/query`）をハイブリッド検索パイプラインに直接統合。
+- ⚙️ **手続き型メモリ & ワークフロー追跡**: ツール実行ログの記録および反復可能なマルチステップ手順を保持（`/procedural/track`）。
 - 🔒 **ローカルファースト＆ゼロデータ漏洩**: 組み込み LanceDB（Arrow/C++）ベクトルストア + SQLite WAL。データがホストマシンのファイルシステム外に出ることはありません。
-- 🔌 **ユニバーサルエージェント対応（MCP & REST）**: **OpenAI Codex**、**Cursor Composer**、**GitHub Copilot**、**Windsurf**、**Claude Desktop** と追加設定なしでネイティブ接続。
+- 🔌 **ユニバーサルエージェント対応（MCP & REST）**: **Google Antigravity**、**OpenAI Codex**、**Cursor Composer**、**GitHub Copilot**、**Windsurf**、**Claude Desktop** と1クリック自動CLIインストーラーで接続。
+- 🛡️ **エンタープライズ RBAC とセキュリティ**: ロール別アクセス制御（`admin`, `architect`, `editor`, `viewer`）および API Key / Bearer トークン認証に対応。
 
 ---
 
@@ -125,6 +129,62 @@ elephantine start --port 8765
 
 ---
 
+<a id="1クリック-ide-環境設定-mcp"></a>
+## 🔌 1クリック IDE 環境設定 (MCP)
+
+Elephantine は、ネイティブの **Model Context Protocol (MCP)** を介して主要な環境に即座に接続します：
+
+### ⚡ 1秒自動 CLI インストーラー
+JSON ファイルを手動で探して編集する必要はありません：
+
+```bash
+# Google Antigravity (AGY)
+elephantine install-antigravity
+
+# OpenAI Codex & GitHub Copilot
+elephantine install-codex
+
+# Cursor Composer & Editor
+elephantine install-cursor
+
+# Claude Desktop
+elephantine install-claude
+
+# VS Code ワークスペース (.vscode/settings.json)
+elephantine install-vscode
+```
+
+### 手動設定の確認
+いつでも貼り付け可能な設定内容を確認できます：
+```bash
+elephantine config-antigravity
+elephantine config-codex
+elephantine config-cursor
+elephantine config-claude
+```
+
+---
+
+<a id="ターミナル-cli-コマンド"></a>
+## 💻 ターミナル CLI コマンド
+
+ブラウザを開かずに、ターミナルから直接記憶の保存と検索を実行できます：
+
+```bash
+# 1. ワークスペースと権限を指定して記憶を保存
+elephantine remember "データベースは pgvector 拡張を導入した PostgreSQL 16 を使用すること。" \
+  --workspace phoenix-core \
+  --category architecture \
+  --authority 1.0
+
+# 2. ハイブリッド検索で記憶を呼び出す
+elephantine recall "使用しているデータベースは何ですか？" \
+  --workspace phoenix-core \
+  --top-k 3
+```
+
+---
+
 <a id="マルチエージェント共有ワークスペース"></a>
 ## 👥 マルチエージェント共有ワークスペース
 
@@ -167,74 +227,28 @@ results = client.recall(
 
 ---
 
-<a id="webui-ダッシュボード"></a>
-## 🖥️ WebUI ダッシュボード
+<a id="webui-ダッシュボード--ナレッジグラフ"></a>
+## 🖥️ WebUI ダッシュボード & インタラクティブ・ナレッジグラフ
 
-Elephantine には、`http://localhost:8765/dashboard` でアクセスできる軽量なメモリインスペクターが標準搭載されています：
+`http://localhost:8765/dashboard` でアクセスできる軽量メモリインスペクター：
 
 - **リアルタイム記憶台帳**: 有効な記憶と非推奨（deprecated）になった記憶、リビジョン履歴を一覧表示。
-- **権限と衝突の追跡**: ロールベースの変更履歴や LWW（Last-Write-Wins）の世代チェーンを監視。
-- **ナレッジグラフビューア**: 抽出された主語-述語-目的語のエンティティ関係トリプレットを探索。
-- **ライブ検索＆フィルタ**: 密ベクトルと BM25 のハイブリッド検索をインタラクティブにテスト。
+- **🕸 インタラクティブ・ナレッジグラフ (Cytoscape.js)**: 力指向（CoSE）、円形、同心円レイアウトで関係性ネットワークをインタラクティブに探索。
+- **タップで詳細表示**: ノードやリレーションの矢印をクリックすると、右側のパネルに関連する信頼度や元データを即座に表示。
+- **権限と衝突の追跡**: ロールベースの変更履歴や LWW 世代チェーンを監視。
 
 ---
 
-<a id="ide--エージェント設定-mcp"></a>
-## 🔌 Cursor, OpenAI Codex & Claude Desktop 設定
+<a id="各言語-sdk-python--ts"></a>
+## 💻 各言語 SDK (Python & TypeScript)
 
-Elephantine は、ネイティブの **Model Context Protocol (MCP)** および高速ローカル REST エンドポイントを介して、主要なエージェント対応IDEやデスクトップAIクライアントに接続します。
-
-### 1. OpenAI Codex & GitHub Copilot (VS Code)
-VS Code や OpenAI Codex を利用する環境の場合：
-1. `elephantine config-codex` を実行して設定スニペットを表示します。
-2. `.vscode/settings.json`（または MCP 設定ファイル）に追加します：
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-*またはスクリプトからローカル REST API（`http://127.0.0.1:8765/recall`）を直接呼び出すことも可能です。*
-
-### 2. Cursor の設定
-1. **Cursor Settings** -> **Features** -> **MCP Servers** -> **Add New MCP Server** を開きます。
-2. 以下を入力します：
-   - **Name**: `elephantine`
-   - **Type**: `command`
-   - **Command**: `elephantine mcp`
-
-### 3. Claude Desktop の設定
-`elephantine config-claude` を実行するか、`claude_desktop_config.json` に以下を記述します：
-
-```json
-{
-  "mcpServers": {
-    "elephantine": {
-      "command": "elephantine",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
----
-
-<a id="python-sdk--langchain-統合"></a>
-## 💻 Python SDK & LangChain 統合
-
-Elephantine は同期および非同期クライアントと、LangChain 向けメモリ統合を提供します：
-
+### 1. Python SDK & LangChain 統合
 ```python
 import asyncio
 from elephantine.client import AsyncElephantineClient, ElephantineLangChainMemory
 
 async def main():
     async with AsyncElephantineClient("http://127.0.0.1:8765") as client:
-        # 意味的エンティティ整合性を保ちながら保存
         await client.remember(
             content="ユーザーは非同期テストランナーを備えた pytest を好む。",
             category="preference",
@@ -243,7 +257,6 @@ async def main():
             role_authority=0.8
         )
 
-        # 時間減衰とワークスペース分離を適用して検索
         res = await client.recall(
             query="テストランナーの好み",
             workspace_id="dev-team",
@@ -261,6 +274,47 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+### 2. TypeScript / Node.js SDK (`@elephantine/sdk`)
+`sdks/typescript/` にて提供：
+
+```typescript
+import { ElephantineClient } from '@elephantine/sdk';
+
+const client = new ElephantineClient('http://127.0.0.1:8765');
+
+// 記憶の保存
+await client.remember({
+  content: '本番環境へのデプロイは毎週火曜日 10:00 UTC に行われます。',
+  category: 'devops',
+  workspaceId: 'infra-team',
+  roleAuthority: 0.9
+});
+
+// 記憶の呼び出し
+const res = await client.recall({
+  query: 'デプロイスケジュール',
+  workspaceId: 'infra-team'
+});
+console.log(res.memories);
+```
+
+---
+
+<a id="エンタープライズ-rbac--セキュリティ"></a>
+## 🛡️ エンタープライズ RBAC & セキュリティ
+
+チーム利用や企業導入向けのきめ細かなアクセス制御：
+
+* **定義済みロール**:
+  - `admin`: 無制限の全権限（`read`, `write`, `delete`, `admin`）。
+  - `architect`: すべてのカテゴリで読み書きおよび削除が可能。
+  - `editor`: 有効な記憶の読み書き。
+  - `viewer`: 読み取り（検索）専用。書き込みや削除は HTTP 403 Forbidden で拒絶されます。
+* **トークン認証**:
+  - `ELEPHANTINE_AUTH_ENABLED=true` で有効化。
+  - `X-API-Key: <key>` ヘッダーまたは `Authorization: Bearer <key>` による検証。
+  - デフォルトのコミュニティモード（`AUTH_ENABLED=false`）では完全ローカルで設定なしに即動作します。
 
 ---
 
@@ -290,7 +344,9 @@ if __name__ == "__main__":
 - [x] **v0.2.5**: グラフメモリおよびエンティティ関係トリプレット抽出（`/graph/query`）。
 - [x] **v0.3.0**: 軽量 WebUI メモリインスペクター & タイムトラベルグラフ可視化ツール。
 - [x] **v0.3.5**: マルチエージェント共有ワークスペース & ロールベース権限コンセンサス（`workspace_id`, `role_authority`）。
-- [ ] **v1.0.0**: エンタープライズ向けマルチテナント RBAC & エージェント間 CRDT 分散合意。
+- [x] **v0.3.8**: 1クリック IDE インストーラー（Antigravity, Codex, Cursor, Claude, VS Code） & Cytoscape.js インタラクティブグラフ。
+- [x] **v0.4.0**: TypeScript / Node.js SDK & エンタープライズ RBAC セキュリティレイヤー。
+- [ ] **v1.0.0**: エージェント間分散 CRDT 合意 & マルチノードクラスター同期。
 
 ---
 
