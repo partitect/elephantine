@@ -136,7 +136,8 @@ async def recall_endpoint(
     )
 
     # Batch fetch candidates metadata from SQLite in single query
-    top_candidates = ranked[:req.top_k * 2]
+    # Retrieve sufficient candidates so that active memories are found even when historical versions exist
+    top_candidates = ranked[:max(100, req.top_k * 10)]
     top_ids = [item["id"] for item in top_candidates]
     metadata_map = await svc.sqlite_store.get_memories_batch(top_ids)
 

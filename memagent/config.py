@@ -1,5 +1,6 @@
 """Configuration module for MemAgent."""
 from pathlib import Path
+from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,6 +24,12 @@ class Settings(BaseSettings):
     ONN_MODELS_CACHE_DIR: Path = Path("./data/models")
     ONNX_INTRA_OP_NUM_THREADS: int = 2
     ONNX_INTER_OP_NUM_THREADS: int = 1
+
+    # In-Process GGUF / llama.cpp Engine Settings
+    GGUF_MODEL_PATH: Optional[Path] = None
+    GGUF_N_CTX: int = 2048
+    GGUF_N_THREADS: int = 2
+    GGUF_TEMPERATURE: float = 0.1
 
     # Cognitive & Recall Settings
     TIME_DECAY_LAMBDA: float = 0.005  # Decay rate per hour

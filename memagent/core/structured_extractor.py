@@ -82,6 +82,18 @@ class StructuredMemoryExtractor:
         if len(raw_clean) < 4:
             return []
 
+        # 1. Try In-Process GGUF SLM Engine if model file is configured and present
+        try:
+            from memagent.core.gguf_extractor import LlamaCppEngine
+            engine = LlamaCppEngine.get_instance()
+            if engine.is_available:
+                facts = engine.extract_memories(raw_clean)
+                if facts:
+                    return facts
+        except Exception:
+            pass
+
+        # 2. Fallback to ultra-fast two-stage heuristic extraction
         from memagent.core.extractor import TwoStageMemoryExtractor
         stage1 = TwoStageMemoryExtractor()
         res = stage1.extract_structured(raw_clean, default_category=default_category)
