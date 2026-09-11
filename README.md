@@ -196,7 +196,39 @@ elephantine remember "PostgreSQL 16 with pgvector extension is required" \
 elephantine recall "which database engine are we using?" \
   --workspace phoenix-core \
   --top-k 3
+
+# 3. Register a proactive trigger (recurring or absolute)
+elephantine trigger-create "Today is Friday! Weekly progress report is due at 17:00." \
+  --trigger "weekly:FRI:17:00" \
+  --workspace phoenix-core \
+  --agent coder_agent
+
+# 4. Pull pending unacknowledged proactive alerts
+elephantine trigger-pending --agent coder_agent --workspace phoenix-core
 ```
+
+---
+
+<a id="proactive-memory-triggers"></a>
+## 🔔 Proactive Memory Triggers (Autonomous Memory Feeds)
+
+Traditional memory systems (such as Mem0) are **purely reactive**: an AI agent must explicitly execute a query (`/recall`) to know what it remembered.
+
+**Elephantine introduces Proactive Memory Triggers**: The engine actively stages alerts and feeds critical context to agents **without requiring prompt lookups**, based on:
+- **Recurring Schedules**: `weekly:FRI:17:00` (e.g. weekly reports), `daily:09:00` (morning standups).
+- **Time Intervals**: `every:30m`, `every:2h`, `every:1d` (cache invalidations, health checks).
+- **Exact Timestamps**: ISO-8601 datetimes (`2026-09-15T10:00:00Z`).
+
+### Delivery Modes:
+1. **Pull-Based Check-in (Zero-Latency)**: Ajan seans başlattığında ya da döngü içinde bekleyen bildirimleri çeker:
+   ```python
+   alerts = client.get_pending_alerts(target_agent="coder_agent", workspace_id="phoenix-core")
+   for alert in alerts:
+       print(f"Proactive context: {alert['content']}")
+       client.acknowledge_alert(alert['trigger_id'])
+   ```
+2. **Real-Time Streaming (SSE)**: Listen to live proactive triggers via `GET /proactive/stream`.
+3. **HTTP Webhooks**: Configure `webhook_url` to receive instant asynchronous POST notifications.
 
 ---
 

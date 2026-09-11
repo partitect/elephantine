@@ -8,17 +8,46 @@ class HybridScorer:
     Combines Dense Vector Similarity + Sparse BM25 + Exponential Temporal Decay.
     Score = [alpha * dense_norm + (1 - alpha) * sparse_norm] * exp(-lambda * delta_hours)
     """
-    def __init__(self, decay_lambda: float = settings.TIME_DECAY_LAMBDA):
-        self.decay_lambda = decay_lambda
+    def __init__(self, decay_lambda: float = None, time_decay_lambda: float = None):
+        if time_decay_lambda is not None:
+            self.decay_lambda = time_decay_lambda
+        elif decay_lambda is not None:
+            self.decay_lambda = decay_lambda
+        else:
+            self.decay_lambda = settings.TIME_DECAY_LAMBDA
 
-    def calculate_time_decay(self, created_at_epoch: float, now_epoch: float = None) -> float:
-        if now_epoch is None:
+    def calculate_time_decay(self, created_at: Any, now: Any = None) -> float:
+        """
+        Calculate exponential time decay exp(-lambda * delta_hours).
+        Accepts float (epoch seconds), datetime, or ISO-formatted timestamp string.
+        """
+        if now is None:
             now_epoch = datetime.now(timezone.utc).timestamp()
-        
-        delta_seconds = max(0.0, now_epoch - created_at_epoch)
+        elif isinstance(now, (int, float)):
+            now_epoch = float(now)
+        elif isinstance(now, datetime):
+            now_epoch = now.timestamp()
+        elif isinstance(now, str):
+            now_epoch = datetime.fromisoformat(now).timestamp()
+        else:
+            now_epoch = datetime.now(timezone.utc).timestamp()
+
+        if isinstance(created_at, (int, float)):
+            created_epoch = float(created_at)
+        elif isinstance(created_at, datetime):
+            created_epoch = created_at.timestamp()
+        elif isinstance(created_at, str):
+            created_epoch = datetime.fromisoformat(created_at).timestamp()
+        else:
+            created_epoch = now_epoch
+
+        delta_seconds = max(0.0, now_epoch - created_epoch)
         delta_hours = delta_seconds / 3600.0
         decay = math.exp(-self.decay_lambda * delta_hours)
         return float(decay)
+
+    # Backward-compatible alias
+    calculate_temporal_decay = calculate_time_decay
 
     def fuse_and_rank(
         self,

@@ -77,6 +77,46 @@ class ElephantineClient:
         resp.raise_for_status()
         return resp.json()
 
+    def create_trigger(
+        self,
+        condition: str,
+        content: Optional[str] = None,
+        memory_id: Optional[str] = None,
+        trigger_type: str = "datetime",
+        target_agent: str = "default",
+        workspace_id: str = "default",
+        webhook_url: Optional[str] = None
+    ) -> Dict[str, Any]:
+        payload = {
+            "condition_value": condition,
+            "content": content,
+            "memory_id": memory_id,
+            "trigger_type": trigger_type,
+            "target_agent": target_agent,
+            "workspace_id": workspace_id,
+            "webhook_url": webhook_url
+        }
+        resp = self._client.post("/proactive/triggers", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_pending_alerts(
+        self,
+        target_agent: str = "default",
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        params = {"target_agent": target_agent}
+        if workspace_id:
+            params["workspace_id"] = workspace_id
+        resp = self._client.get("/proactive/pending", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def acknowledge_alert(self, trigger_id: str) -> Dict[str, Any]:
+        resp = self._client.post(f"/proactive/acknowledge/{trigger_id}")
+        resp.raise_for_status()
+        return resp.json()
+
 
 class AsyncElephantineClient:
     """
@@ -146,5 +186,45 @@ class AsyncElephantineClient:
 
     async def query_graph(self, entity: str, max_hops: int = 2) -> Dict[str, Any]:
         resp = await self._client.post("/graph/query", json={"entity": entity, "max_hops": max_hops})
+        resp.raise_for_status()
+        return resp.json()
+
+    async def create_trigger(
+        self,
+        condition: str,
+        content: Optional[str] = None,
+        memory_id: Optional[str] = None,
+        trigger_type: str = "datetime",
+        target_agent: str = "default",
+        workspace_id: str = "default",
+        webhook_url: Optional[str] = None
+    ) -> Dict[str, Any]:
+        payload = {
+            "condition_value": condition,
+            "content": content,
+            "memory_id": memory_id,
+            "trigger_type": trigger_type,
+            "target_agent": target_agent,
+            "workspace_id": workspace_id,
+            "webhook_url": webhook_url
+        }
+        resp = await self._client.post("/proactive/triggers", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def get_pending_alerts(
+        self,
+        target_agent: str = "default",
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        params = {"target_agent": target_agent}
+        if workspace_id:
+            params["workspace_id"] = workspace_id
+        resp = await self._client.get("/proactive/pending", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def acknowledge_alert(self, trigger_id: str) -> Dict[str, Any]:
+        resp = await self._client.post(f"/proactive/acknowledge/{trigger_id}")
         resp.raise_for_status()
         return resp.json()

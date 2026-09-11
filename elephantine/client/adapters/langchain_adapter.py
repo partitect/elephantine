@@ -10,12 +10,14 @@ class ElephantineLangChainMemory:
         self,
         client: Optional[ElephantineClient] = None,
         base_url: str = "http://127.0.0.1:8765",
+        workspace_id: str = "default",
         memory_key: str = "history",
         input_key: str = "input",
         source_agent: str = "langchain_agent",
         top_k: int = 3
     ):
         self.client = client or ElephantineClient(base_url=base_url)
+        self.workspace_id = workspace_id
         self.memory_key = memory_key
         self.input_key = input_key
         self.source_agent = source_agent
@@ -30,7 +32,12 @@ class ElephantineLangChainMemory:
         if not query:
             return {self.memory_key: ""}
 
-        res = self.client.recall(query=query, top_k=self.top_k, source_agent=self.source_agent)
+        res = self.client.recall(
+            query=query,
+            top_k=self.top_k,
+            source_agent=self.source_agent,
+            workspace_id=self.workspace_id
+        )
         memories = res.get("memories", [])
         if not memories:
             return {self.memory_key: ""}
@@ -42,9 +49,19 @@ class ElephantineLangChainMemory:
         user_input = inputs.get(self.input_key, "").strip()
         agent_output = next(iter(outputs.values()), "").strip() if outputs else ""
         if user_input:
-            self.client.remember(content=f"User: {user_input}", category="conversation", source_agent=self.source_agent)
+            self.client.remember(
+                content=f"User: {user_input}",
+                category="conversation",
+                source_agent=self.source_agent,
+                workspace_id=self.workspace_id
+            )
         if agent_output:
-            self.client.remember(content=f"Assistant: {agent_output}", category="conversation", source_agent=self.source_agent)
+            self.client.remember(
+                content=f"Assistant: {agent_output}",
+                category="conversation",
+                source_agent=self.source_agent,
+                workspace_id=self.workspace_id
+            )
 
     def clear(self) -> None:
         pass

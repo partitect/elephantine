@@ -111,3 +111,33 @@ class PruneResponse(BaseModel):
     workspace_id: Optional[str] = None
     message: str
 
+# Proactive Memory Trigger Schemas
+class ProactiveTriggerCreate(BaseModel):
+    memory_id: Optional[str] = None
+    content: Optional[str] = None
+    trigger_type: str = Field(default="datetime", description="'datetime', 'interval', 'weekly', 'daily', 'event'")
+    condition_value: str = Field(..., description="e.g. '2026-09-12T17:00:00Z', 'every:30m', 'weekly:FRI:17:00'")
+    target_agent: str = Field(default="default", description="Agent ID to notify or 'all'")
+    workspace_id: str = Field(default="default", description="Workspace isolation scope")
+    webhook_url: Optional[str] = Field(default=None, description="Optional HTTP webhook URL to POST alert to")
+
+class ProactiveAlert(BaseModel):
+    trigger_id: str
+    memory_id: str
+    content: str
+    category: str = "general"
+    workspace_id: str = "default"
+    target_agent: str = "default"
+    role_authority: float = 0.5
+    condition: str
+    triggered_at: datetime
+    is_recurring: bool = False
+    next_trigger_at: Optional[datetime] = None
+
+class ProactiveTriggerResponse(BaseModel):
+    trigger_id: str
+    memory_id: str
+    status: str = "created"
+    next_trigger_at: Optional[datetime] = None
+    message: str = "Proactive trigger registered successfully"
+

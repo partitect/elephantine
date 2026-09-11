@@ -272,6 +272,22 @@ def main():
     rec_parser.add_argument("--top-k", type=int, default=5, help="Maximum number of memories to return")
     rec_parser.add_argument("--base-url", default=f"http://{settings.HOST}:{settings.PORT}", help="Elephantine server URL")
 
+    # trigger-create CLI
+    tc_parser = subparsers.add_parser("trigger-create", help="Create a proactive memory trigger")
+    tc_parser.add_argument("content", help="Memory content to trigger")
+    tc_parser.add_argument("--trigger", required=True, help="Condition e.g. 'every:30m', 'weekly:FRI:17:00', or ISO datetime")
+    tc_parser.add_argument("--type", default="datetime", help="Trigger type (datetime, interval, weekly, daily)")
+    tc_parser.add_argument("--workspace", default=None, help="Workspace ID (auto-detected if omitted)")
+    tc_parser.add_argument("--agent", default="default", help="Target agent ID to notify")
+    tc_parser.add_argument("--webhook", default=None, help="Optional webhook URL")
+    tc_parser.add_argument("--base-url", default=f"http://{settings.HOST}:{settings.PORT}", help="Elephantine server URL")
+
+    # trigger-pending CLI
+    tp_parser = subparsers.add_parser("trigger-pending", help="List unacknowledged proactive memory alerts")
+    tp_parser.add_argument("--agent", default="default", help="Target agent ID")
+    tp_parser.add_argument("--workspace", default=None, help="Workspace ID (auto-detected if omitted)")
+    tp_parser.add_argument("--base-url", default=f"http://{settings.HOST}:{settings.PORT}", help="Elephantine server URL")
+
     args = parser.parse_args()
 
     if args.command == "start":
@@ -294,6 +310,31 @@ def main():
         run_remember_cli(args)
     elif args.command == "recall":
         run_recall_cli(args)
+    elif args.command == "trigger-create":
+        from elephantine.client import ElephantineClient
+        ws = args.workspace or detect_project_workspace()
+        c = ElephantineClient(args.base_url)
+        res = c.create_trigger(
+            condition=args.trigger,
+            content=args.content,
+            trigger_type=args.type,
+            target_agent=args.agent,
+            workspace_id=ws,
+            webhook_url=args.webhook
+        )
+        print(f"\n[🔔 Proactive Trigger Created]")
+        print(f"  Trigger ID: {res.get('trigger_id')}")
+        print(f"  Condition:  {args.trigger}")
+        print(f"  Next Fire:  {res.get('next_trigger_at')}\n")
+    elif args.command == "trigger-pending":
+        from elephantine.client import ElephantineClient
+        ws = args.workspace or detect_project_workspace()
+        c = ElephantineClient(args.base_url)
+        alerts = c.get_pending_alerts(target_agent=args.agent, workspace_id=ws)
+        print(f"\n[🔔 Pending Proactive Alerts for Agent: '{args.agent}'] ({len(alerts)} items)")
+        for a in alerts:
+            print(f"  - [{a.get('trigger_id')}] \"{a.get('content')}\" (Condition: {a.get('condition')})")
+        print()
     elif args.command == "config-antigravity":
         print_antigravity_config()
     elif args.command == "config-claude":

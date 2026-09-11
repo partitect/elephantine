@@ -2,6 +2,7 @@ import json
 import sqlite3
 import aiosqlite
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -99,6 +100,40 @@ class SqliteMetadataStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_subj ON graph_triplets(subject, is_active);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_obj ON graph_triplets(object, is_active);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_pred ON graph_triplets(predicate, is_active);")
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS proactive_triggers (
+                    id TEXT PRIMARY KEY,
+                    memory_id TEXT NOT NULL,
+                    trigger_type TEXT NOT NULL,
+                    condition_value TEXT NOT NULL,
+                    target_agent TEXT NOT NULL DEFAULT 'default',
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
+                    webhook_url TEXT,
+                    created_at TIMESTAMP NOT NULL,
+                    last_triggered_at TIMESTAMP,
+                    next_trigger_at TIMESTAMP,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    FOREIGN KEY(memory_id) REFERENCES memories(id) ON DELETE CASCADE
+                );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_proactive_due ON proactive_triggers(is_active, next_trigger_at);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_proactive_agent ON proactive_triggers(target_agent, workspace_id, status);")
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS proactive_alerts (
+                    id TEXT PRIMARY KEY,
+                    trigger_id TEXT NOT NULL,
+                    memory_id TEXT NOT NULL,
+                    target_agent TEXT NOT NULL DEFAULT 'default',
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
+                    triggered_at TIMESTAMP NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    FOREIGN KEY(trigger_id) REFERENCES proactive_triggers(id) ON DELETE CASCADE
+                );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_pending ON proactive_alerts(target_agent, workspace_id, status);")
         conn.close()
 
     async def insert_memory(
@@ -477,5 +512,154 @@ class SqliteMetadataStore:
                 """, (limit,))
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
+
+    # =========================================================================
+    # PROACTIVE MEMORY TRIGGERS
+    # =========================================================================
+
+    async def create_proactive_trigger(
+        self,
+        trigger_id: str,
+        memory_id: str,
+        trigger_type: str,
+        condition_value: str,
+        target_agent: str = "default",
+        workspace_id: str = "default",
+        webhook_url: Optional[str] = None,
+        next_trigger_at: Optional[datetime] = None
+    ) -> str:
+        """Stores a new proactive trigger attached to an existing memory."""
+        now = datetime.now(timezone.utc)
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            await db.execute("""
+                INSERT INTO proactive_triggers (
+                    id, memory_id, trigger_type, condition_value, target_agent,
+                    workspace_id, webhook_url, created_at, next_trigger_at, is_active, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'active')
+            """, (
+                trigger_id,
+                memory_id,
+                trigger_type,
+                condition_value,
+                target_agent,
+                workspace_id,
+                webhook_url,
+                now.isoformat(),
+                next_trigger_at.isoformat() if next_trigger_at else None
+            ))
+            await db.commit()
+        return trigger_id
+
+    async def get_due_proactive_triggers(self, current_time: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """Finds active triggers whose next_trigger_at is past or due, joined with memory content."""
+        if current_time is None:
+            current_time = datetime.now(timezone.utc)
+        curr_iso = current_time.isoformat()
+
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT pt.*, m.content as memory_content, m.category as memory_category, m.role_authority
+                FROM proactive_triggers pt
+                JOIN memories m ON pt.memory_id = m.id
+                WHERE pt.is_active = 1 
+                  AND pt.status = 'active'
+                  AND pt.next_trigger_at IS NOT NULL 
+                  AND pt.next_trigger_at <= ?
+                ORDER BY pt.next_trigger_at ASC
+            """, (curr_iso,))
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def mark_trigger_fired(
+        self,
+        trigger_id: str,
+        memory_id: str,
+        target_agent: str,
+        workspace_id: str,
+        next_trigger_at: Optional[datetime] = None,
+        is_recurring: bool = False
+    ) -> str:
+        """Updates last_triggered_at and stages alert in proactive_alerts table."""
+        now = datetime.now(timezone.utc)
+        new_status = "active" if is_recurring else "triggered"
+        alert_id = str(uuid.uuid4())
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            await db.execute("""
+                UPDATE proactive_triggers
+                SET last_triggered_at = ?,
+                    next_trigger_at = ?,
+                    status = ?
+                WHERE id = ?
+            """, (
+                now.isoformat(),
+                next_trigger_at.isoformat() if next_trigger_at else None,
+                new_status,
+                trigger_id
+            ))
+            await db.execute("""
+                INSERT INTO proactive_alerts (
+                    id, trigger_id, memory_id, target_agent, workspace_id, triggered_at, status
+                ) VALUES (?, ?, ?, ?, ?, ?, 'pending')
+            """, (
+                alert_id,
+                trigger_id,
+                memory_id,
+                target_agent,
+                workspace_id,
+                now.isoformat()
+            ))
+            await db.commit()
+        return alert_id
+
+    async def get_pending_triggers_for_agent(
+        self,
+        target_agent: str = "default",
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Retrieves fired but unacknowledged alerts waiting for an agent."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            if workspace_id:
+                cursor = await db.execute("""
+                    SELECT pa.id as alert_id, pa.triggered_at, pa.status as alert_status,
+                           pt.id as id, pt.condition_value, pt.trigger_type, pt.next_trigger_at,
+                           m.id as memory_id, m.content as memory_content, m.category as memory_category,
+                           m.role_authority, pa.target_agent, pa.workspace_id
+                    FROM proactive_alerts pa
+                    JOIN proactive_triggers pt ON pa.trigger_id = pt.id
+                    JOIN memories m ON pa.memory_id = m.id
+                    WHERE (pa.target_agent = ? OR pa.target_agent = 'all' OR pa.target_agent = 'default')
+                      AND pa.workspace_id = ?
+                      AND pa.status = 'pending'
+                    ORDER BY pa.triggered_at DESC
+                """, (target_agent, workspace_id))
+            else:
+                cursor = await db.execute("""
+                    SELECT pa.id as alert_id, pa.triggered_at, pa.status as alert_status,
+                           pt.id as id, pt.condition_value, pt.trigger_type, pt.next_trigger_at,
+                           m.id as memory_id, m.content as memory_content, m.category as memory_category,
+                           m.role_authority, pa.target_agent, pa.workspace_id
+                    FROM proactive_alerts pa
+                    JOIN proactive_triggers pt ON pa.trigger_id = pt.id
+                    JOIN memories m ON pa.memory_id = m.id
+                    WHERE (pa.target_agent = ? OR pa.target_agent = 'all' OR pa.target_agent = 'default')
+                      AND pa.status = 'pending'
+                    ORDER BY pa.triggered_at DESC
+                """, (target_agent,))
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def acknowledge_trigger(self, trigger_or_alert_id: str) -> bool:
+        """Marks a proactive alert as acknowledged by the agent (matches alert_id or trigger_id)."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            cursor = await db.execute("""
+                UPDATE proactive_alerts
+                SET status = 'acknowledged'
+                WHERE (id = ? OR trigger_id = ?) AND status = 'pending'
+            """, (trigger_or_alert_id, trigger_or_alert_id))
+            await db.commit()
+            return cursor.rowcount > 0
+
 
 

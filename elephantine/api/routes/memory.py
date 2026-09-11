@@ -3,7 +3,7 @@ import json
 import uuid
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from elephantine.config import settings
 from elephantine.api.schemas import (
@@ -19,7 +19,10 @@ from elephantine.api.schemas import (
     GraphQueryResponse,
     ConsolidateRequest,
     ConsolidateResponse,
-    PruneResponse
+    PruneResponse,
+    ProactiveTriggerCreate,
+    ProactiveTriggerResponse,
+    ProactiveAlert
 )
 from elephantine.core.embedder import OnnxCpuEmbedder
 from elephantine.core.extractor import TwoStageMemoryExtractor
@@ -34,6 +37,7 @@ from elephantine.api.middleware.auth import require_write_permission, require_re
 from elephantine.storage.procedural_store import ProceduralMemoryStore
 from elephantine.core.buffer import AsyncMemoryWriteBuffer
 from elephantine.core.consolidator import MemoryConsolidator
+from elephantine.core.proactive import ProactiveEngine, parse_trigger_condition
 
 router = APIRouter()
 
@@ -50,6 +54,7 @@ class ServiceContainer:
         self.conflict_resolver = ConflictResolver(self.sqlite_store)
         self.write_buffer = AsyncMemoryWriteBuffer(self.sqlite_store, self.lancedb_store)
         self.consolidator = MemoryConsolidator(self.sqlite_store)
+        self.proactive_engine = ProactiveEngine(self.sqlite_store)
 
 _container: Optional[ServiceContainer] = None
 
@@ -355,4 +360,136 @@ async def prune_memories_endpoint(
         workspace_id=workspace_id,
         message=f"Pruned {pruned_count} deprecated memories older than {older_than_days} days."
     )
+
+# =============================================================================
+# PROACTIVE MEMORY TRIGGER ENDPOINTS
+# =============================================================================
+
+@router.post("/proactive/triggers", response_model=ProactiveTriggerResponse)
+async def create_proactive_trigger_endpoint(
+    req: ProactiveTriggerCreate,
+    svc: ServiceContainer = Depends(get_container)
+):
+    """
+    Registers a proactive memory trigger. If content is provided without memory_id,
+    persists a memory item first and attaches the trigger to it.
+    """
+    memory_id = req.memory_id
+    now = datetime.now(timezone.utc)
+
+    if not memory_id:
+        if not req.content:
+            raise HTTPException(status_code=422, detail="Either 'memory_id' or 'content' must be provided.")
+        memory_id = str(uuid.uuid4())
+        vec = svc.embedder.embed_text(req.content)
+        await svc.sqlite_store.insert_memory(
+            memory_id=memory_id,
+            content=req.content,
+            source_agent=req.target_agent,
+            entity_key=None,
+            category="proactive",
+            confidence=1.0,
+            metadata={"trigger_condition": req.condition_value},
+            created_at=now,
+            workspace_id=req.workspace_id,
+            role_authority=0.8
+        )
+        svc.lancedb_store.add_vector(
+            memory_id=memory_id,
+            vector=vec,
+            source_agent=req.target_agent,
+            category="proactive",
+            created_at_epoch=now.timestamp()
+        )
+
+    next_trigger_at, _ = parse_trigger_condition(
+        req.trigger_type,
+        req.condition_value,
+        reference_time=now
+    )
+
+    t_id = str(uuid.uuid4())
+    await svc.sqlite_store.create_proactive_trigger(
+        trigger_id=t_id,
+        memory_id=memory_id,
+        trigger_type=req.trigger_type,
+        condition_value=req.condition_value,
+        target_agent=req.target_agent,
+        workspace_id=req.workspace_id,
+        webhook_url=req.webhook_url,
+        next_trigger_at=next_trigger_at
+    )
+
+    return ProactiveTriggerResponse(
+        trigger_id=t_id,
+        memory_id=memory_id,
+        status="created",
+        next_trigger_at=next_trigger_at,
+        message="Proactive memory trigger registered successfully."
+    )
+
+@router.get("/proactive/pending", response_model=List[ProactiveAlert])
+async def get_pending_proactive_alerts(
+    target_agent: str = Query(default="default"),
+    workspace_id: Optional[str] = Query(default=None),
+    svc: ServiceContainer = Depends(get_container)
+):
+    """
+    Fetches unacknowledged proactive alerts for an agent (pull-based check-in).
+    """
+    triggers = await svc.sqlite_store.get_pending_triggers_for_agent(
+        target_agent=target_agent,
+        workspace_id=workspace_id
+    )
+    alerts = []
+    for t in triggers:
+        alerts.append(ProactiveAlert(
+            trigger_id=t["id"],
+            memory_id=t["memory_id"],
+            content=t["memory_content"],
+            category=t.get("memory_category", "general"),
+            workspace_id=t["workspace_id"],
+            target_agent=t["target_agent"],
+            role_authority=float(t.get("role_authority", 0.5)),
+            condition=t["condition_value"],
+            triggered_at=datetime.fromisoformat(t["last_triggered_at"]) if t.get("last_triggered_at") else datetime.now(timezone.utc),
+            is_recurring=bool(t.get("next_trigger_at")),
+            next_trigger_at=datetime.fromisoformat(t["next_trigger_at"]) if t.get("next_trigger_at") else None
+        ))
+    return alerts
+
+@router.post("/proactive/acknowledge/{trigger_id}")
+async def acknowledge_proactive_alert(
+    trigger_id: str,
+    svc: ServiceContainer = Depends(get_container)
+):
+    """
+    Marks a proactive trigger alert as acknowledged by the receiving agent.
+    """
+    success = await svc.sqlite_store.acknowledge_trigger(trigger_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Alert not found or already acknowledged.")
+    return {"status": "acknowledged", "trigger_id": trigger_id}
+
+@router.get("/proactive/stream")
+async def stream_proactive_alerts(
+    svc: ServiceContainer = Depends(get_container)
+):
+    """
+    Server-Sent Events (SSE) stream allowing agents to listen in real time for proactive alerts.
+    """
+    from fastapi.responses import StreamingResponse
+
+    async def event_generator():
+        q = svc.proactive_engine.subscribe_listener()
+        try:
+            while True:
+                alert = await q.get()
+                yield f"data: {json.dumps(alert, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            svc.proactive_engine.unsubscribe_listener(q)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 

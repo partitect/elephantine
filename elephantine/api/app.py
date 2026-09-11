@@ -5,12 +5,25 @@ from elephantine.api.routes.health import router as health_router
 from elephantine.api.routes.memory import router as memory_router
 from elephantine.api.routes.dashboard import router as dashboard_router
 
+from contextlib import asynccontextmanager
+from elephantine.api.routes.memory import get_container
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start proactive background evaluator daemon
+    container = get_container()
+    await container.proactive_engine.start()
+    yield
+    # Shutdown: Stop proactive background evaluator daemon
+    await container.proactive_engine.stop()
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="MemAgent Core",
         description="Local-First, CPU-Native Cognitive AI Memory Engine",
         version="0.1.0",
-        debug=settings.DEBUG
+        debug=settings.DEBUG,
+        lifespan=lifespan
     )
 
     app.add_middleware(
