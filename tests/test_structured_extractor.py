@@ -1,5 +1,5 @@
 import pytest
-from memagent.core.structured_extractor import (
+from elephantine.core.structured_extractor import (
     ExtractedFactItem,
     ExtractionOutputSchema,
     GroundingValidator,

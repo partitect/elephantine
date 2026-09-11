@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from memagent.client.client import ElephantineClient
+from elephantine.client.client import ElephantineClient
 
 class ElephantineLangChainMemory:
     """

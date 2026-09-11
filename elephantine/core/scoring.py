@@ -1,7 +1,7 @@
 import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
-from memagent.config import settings
+from elephantine.config import settings
 
 class HybridScorer:
     """

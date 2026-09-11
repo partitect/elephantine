@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
-from memagent.config import settings
-from memagent.storage.sqlite_store import SqliteMetadataStore
+from elephantine.config import settings
+from elephantine.storage.sqlite_store import SqliteMetadataStore
 
 class ConflictResolver:
     """

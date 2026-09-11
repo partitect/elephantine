@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from memagent.api.app import app
+from elephantine.api.app import app
 
 @pytest.mark.asyncio
 async def test_remember_and_recall_pipeline():

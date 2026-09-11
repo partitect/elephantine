@@ -1,8 +1,8 @@
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from memagent.core.gguf_extractor import LlamaCppEngine
-from memagent.core.structured_extractor import (
+from elephantine.core.gguf_extractor import LlamaCppEngine
+from elephantine.core.structured_extractor import (
     StructuredMemoryExtractor,
     ExtractedFactItem,
     ExtractionOutputSchema
@@ -34,7 +34,7 @@ def test_gguf_engine_mocked_inference():
         ]
     }
 
-    with patch("memagent.core.gguf_extractor.LlamaCppEngine.is_available", True):
+    with patch("elephantine.core.gguf_extractor.LlamaCppEngine.is_available", True):
         engine = LlamaCppEngine(model_path=Path("dummy.gguf"))
         engine._llm = mock_llm
 

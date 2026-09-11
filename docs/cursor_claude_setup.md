@@ -11,18 +11,18 @@ MemAgent provides your AI agents in Cursor and Claude Desktop with **persistent 
    - **Windows**: %APPDATA%\Claude\claude_desktop_config.json
    - **Linux**: ~/.config/Claude/claude_desktop_config.json
 
-2. Add memagent under mcpServers:
+2. Add elephantine under mcpServers:
    `json
    {
      "mcpServers": {
-       "memagent": {
+       "elephantine": {
          "command": "python",
-         "args": ["-m", "memagent.mcp.server"]
+         "args": ["-m", "elephantine.mcp.server"]
        }
      }
    }
    `
-   *(Or run python -m memagent.cli config-claude to get your exact virtual environment Python path).*
+   *(Or run python -m elephantine.cli config-claude to get your exact virtual environment Python path).*
 
 3. Restart Claude Desktop. The hammer icon will show:
    - 
@@ -38,9 +38,9 @@ ecall_context
 1. Open **Cursor Settings** (Ctrl+, or Cmd+,).
 2. Navigate to **Features** -> **MCP Servers**.
 3. Click **+ Add New MCP Server**:
-   - **Name**: memagent
+   - **Name**: elephantine
    - **Type**: command
-   - **Command**: python -m memagent.mcp.server
+   - **Command**: python -m elephantine.mcp.server
 4. Click Save. Cursor Composer and Chat now automatically invoke MemAgent to remember and recall architecture choices.
 
 ---
@@ -49,14 +49,14 @@ ecall_context
 
 `ash
 # Start REST API server
-python -m memagent.cli start --port 8765
+python -m elephantine.cli start --port 8765
 
 # Start MCP Server directly
-python -m memagent.cli mcp
+python -m elephantine.cli mcp
 
 # Print Claude Desktop config snippet
-python -m memagent.cli config-claude
+python -m elephantine.cli config-claude
 
 # Print Cursor setup instructions
-python -m memagent.cli config-cursor
+python -m elephantine.cli config-cursor
 `

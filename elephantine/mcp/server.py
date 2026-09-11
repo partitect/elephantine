@@ -2,8 +2,8 @@ import asyncio
 import sys
 from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
-from memagent.api.routes.memory import get_container
-from memagent.api.schemas import RememberRequest, RecallRequest, ToolCallExecution
+from elephantine.api.routes.memory import get_container
+from elephantine.api.schemas import RememberRequest, RecallRequest, ToolCallExecution
 
 mcp = FastMCP("MemAgent")
 
@@ -25,7 +25,7 @@ async def remember_fact(
         entity_key=entity_key,
         source_agent=source_agent
     )
-    from memagent.api.routes.memory import remember_endpoint
+    from elephantine.api.routes.memory import remember_endpoint
     res = await remember_endpoint(req, svc)
     return f"Memory stored (id: {res.id}). Conflicts resolved: {len(res.conflicts_resolved)}"
 
@@ -41,7 +41,7 @@ async def recall_context(
     """
     svc = get_container()
     req = RecallRequest(query=query, top_k=top_k, category=category)
-    from memagent.api.routes.memory import recall_endpoint
+    from elephantine.api.routes.memory import recall_endpoint
     res = await recall_endpoint(req, svc)
     return [
         {

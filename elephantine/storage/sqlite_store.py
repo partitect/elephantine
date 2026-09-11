@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from memagent.config import settings
+from elephantine.config import settings
 
 class SqliteMetadataStore:
     """

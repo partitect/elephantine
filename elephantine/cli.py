@@ -2,7 +2,7 @@ import sys
 import json
 import argparse
 import uvicorn
-from memagent.config import settings
+from elephantine.config import settings
 
 def print_claude_config():
     """Outputs ready-to-paste JSON config for Claude Desktop."""
@@ -11,7 +11,7 @@ def print_claude_config():
         "mcpServers": {
             "elephantine": {
                 "command": python_exec,
-                "args": ["-m", "memagent.mcp.server"]
+                "args": ["-m", "elephantine.mcp.server"]
             }
         }
     }
@@ -26,7 +26,7 @@ def print_cursor_config():
     print("In Cursor Settings -> Features -> MCP Servers -> Add New:")
     print("  Name: elephantine")
     print("  Type: command")
-    print(f"  Command: {python_exec} -m memagent.mcp.server")
+    print(f"  Command: {python_exec} -m elephantine.mcp.server")
     print("----------------------------------------\n")
 
 def main():
@@ -51,9 +51,9 @@ def main():
 
     if args.command == "start":
         print(f"Starting MemAgent REST Server on http://{args.host}:{args.port}")
-        uvicorn.run("memagent.api.app:app", host=args.host, port=args.port, reload=False)
+        uvicorn.run("elephantine.api.app:app", host=args.host, port=args.port, reload=False)
     elif args.command == "mcp":
-        from memagent.mcp.server import main as mcp_main
+        from elephantine.mcp.server import main as mcp_main
         mcp_main()
     elif args.command == "config-claude":
         print_claude_config()

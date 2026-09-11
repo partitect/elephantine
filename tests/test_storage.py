@@ -3,10 +3,10 @@ import shutil
 import pathlib
 import pytest
 from datetime import datetime
-from memagent.storage.sqlite_store import SqliteMetadataStore
-from memagent.storage.lancedb_store import LanceDbVectorStore
-from memagent.core.embedder import OnnxCpuEmbedder
-from memagent.core.conflict import ConflictResolver
+from elephantine.storage.sqlite_store import SqliteMetadataStore
+from elephantine.storage.lancedb_store import LanceDbVectorStore
+from elephantine.core.embedder import OnnxCpuEmbedder
+from elephantine.core.conflict import ConflictResolver
 
 @pytest.fixture
 def temp_dirs(tmp_path):

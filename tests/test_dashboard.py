@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from memagent.api.app import create_app
+from elephantine.api.app import create_app
 
 @pytest.mark.asyncio
 async def test_dashboard_and_stats():

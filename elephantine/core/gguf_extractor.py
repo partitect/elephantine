@@ -2,14 +2,14 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from memagent.config import settings
-from memagent.core.structured_extractor import (
+from elephantine.config import settings
+from elephantine.core.structured_extractor import (
     ExtractionOutputSchema,
     ExtractedFactItem,
     GroundingValidator
 )
 
-logger = logging.getLogger("memagent.core.gguf_extractor")
+logger = logging.getLogger("elephantine.core.gguf_extractor")
 
 class LlamaCppEngine:
     """

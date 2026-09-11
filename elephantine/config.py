@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # Storage Paths
     BASE_DATA_DIR: Path = Path("./data")
-    SQLITE_DB_NAME: str = "memagent_metadata.db"
+    SQLITE_DB_NAME: str = "elephantine_metadata.db"
     LANCEDB_DIR_NAME: str = "lancedb_store"
 
     # Embedding Model Settings (CPU Native ONNX)

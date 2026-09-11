@@ -3,7 +3,7 @@ import pathlib
 import lancedb
 import pyarrow as pa
 from typing import Any, Dict, List, Optional
-from memagent.config import settings
+from elephantine.config import settings
 
 class LanceDbVectorStore:
     """

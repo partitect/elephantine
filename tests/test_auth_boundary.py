@@ -1,6 +1,6 @@
 import pytest
-from memagent.core.auth_interface import TenantContext, CommunityLocalAuthEngine, CommunityLocalTenantResolver
-from memagent.enterprise import EnterpriseRbacEngine, EnterpriseTenantResolver
+from elephantine.core.auth_interface import TenantContext, CommunityLocalAuthEngine, CommunityLocalTenantResolver
+from elephantine.enterprise import EnterpriseRbacEngine, EnterpriseTenantResolver
 
 @pytest.mark.asyncio
 async def test_community_auth_zero_overhead():

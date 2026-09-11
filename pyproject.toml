@@ -47,8 +47,7 @@ dependencies = [
 ]
 
 [project.scripts]
-elephantine = "memagent.cli:main"
-memagent = "memagent.cli:main"
+elephantine = "elephantine.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/partitect/elephantine"
@@ -68,5 +67,5 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["memagent"]
+packages = ["elephantine"]
 

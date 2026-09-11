@@ -4,7 +4,7 @@ These modules provide Multi-Tenant RBAC, isolated LanceDB namespaces,
 Audit Logging, and Multi-Agent Consensus for licensed enterprise users.
 """
 from typing import Dict, List, Optional
-from memagent.core.auth_interface import IAuthorizationEngine, ITenantStorageResolver, TenantContext
+from elephantine.core.auth_interface import IAuthorizationEngine, ITenantStorageResolver, TenantContext
 
 class EnterpriseRbacEngine(IAuthorizationEngine):
     """

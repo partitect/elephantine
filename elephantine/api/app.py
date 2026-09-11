@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from memagent.config import settings
-from memagent.api.routes.health import router as health_router
-from memagent.api.routes.memory import router as memory_router
-from memagent.api.routes.dashboard import router as dashboard_router
+from elephantine.config import settings
+from elephantine.api.routes.health import router as health_router
+from elephantine.api.routes.memory import router as memory_router
+from elephantine.api.routes.dashboard import router as dashboard_router
 
 def create_app() -> FastAPI:
     app = FastAPI(

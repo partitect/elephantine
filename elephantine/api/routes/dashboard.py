@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from typing import List, Dict, Any, Optional
-from memagent.storage.sqlite_store import SqliteMetadataStore
+from elephantine.storage.sqlite_store import SqliteMetadataStore
 
 router = APIRouter()
 sqlite_store = SqliteMetadataStore()

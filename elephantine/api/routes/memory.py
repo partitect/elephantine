@@ -5,8 +5,8 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from memagent.config import settings
-from memagent.api.schemas import (
+from elephantine.config import settings
+from elephantine.api.schemas import (
     RememberRequest,
     RememberResponse,
     RecallRequest,
@@ -18,14 +18,14 @@ from memagent.api.schemas import (
     GraphQueryRequest,
     GraphQueryResponse
 )
-from memagent.core.embedder import OnnxCpuEmbedder
-from memagent.core.extractor import TwoStageMemoryExtractor
-from memagent.core.graph_extractor import RuleBasedGraphExtractor
-from memagent.core.scoring import HybridScorer
-from memagent.core.conflict import ConflictResolver
-from memagent.storage.sqlite_store import SqliteMetadataStore
-from memagent.storage.lancedb_store import LanceDbVectorStore
-from memagent.storage.procedural_store import ProceduralMemoryStore
+from elephantine.core.embedder import OnnxCpuEmbedder
+from elephantine.core.extractor import TwoStageMemoryExtractor
+from elephantine.core.graph_extractor import RuleBasedGraphExtractor
+from elephantine.core.scoring import HybridScorer
+from elephantine.core.conflict import ConflictResolver
+from elephantine.storage.sqlite_store import SqliteMetadataStore
+from elephantine.storage.lancedb_store import LanceDbVectorStore
+from elephantine.storage.procedural_store import ProceduralMemoryStore
 
 router = APIRouter()
 

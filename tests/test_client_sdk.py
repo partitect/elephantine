@@ -1,8 +1,8 @@
 import pytest
 from httpx import AsyncClient, ASGITransport, Client
-from memagent.api.app import app
-from memagent import ElephantineClient, AsyncElephantineClient
-from memagent.client.adapters.langchain_adapter import ElephantineLangChainMemory
+from elephantine.api.app import app
+from elephantine import ElephantineClient, AsyncElephantineClient
+from elephantine.client.adapters.langchain_adapter import ElephantineLangChainMemory
 
 @pytest.mark.asyncio
 async def test_async_client_with_transport():

@@ -158,7 +158,7 @@ Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/das
 Coordinate agent teams (e.g. Coder, Tester, Architect) with persistent memory pools and hierarchical authority protection:
 
 ```python
-from memagent.client import ElephantineClient
+from elephantine.client import ElephantineClient
 
 # Connect to local Elephantine daemon
 client = ElephantineClient("http://127.0.0.1:8765")
@@ -212,14 +212,14 @@ Elephantine includes a built-in, lightweight Memory Inspector accessible at `htt
 Elephantine ships with native **Model Context Protocol (MCP)** support.
 
 ### Claude Desktop Setup
-Run `python -m memagent.cli config-claude` or add this to your `claude_desktop_config.json`:
+Run `python -m elephantine.cli config-claude` or add this to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "elephantine": {
       "command": "python",
-      "args": ["-m", "memagent.mcp.server"]
+      "args": ["-m", "elephantine.mcp.server"]
     }
   }
 }
@@ -230,7 +230,7 @@ Run `python -m memagent.cli config-claude` or add this to your `claude_desktop_c
 2. Fill in:
    - **Name**: `elephantine`
    - **Type**: `command`
-   - **Command**: `python -m memagent.mcp.server`
+   - **Command**: `python -m elephantine.mcp.server`
 
 ---
 
@@ -241,7 +241,7 @@ Elephantine provides sync and async clients plus native LangChain memory integra
 
 ```python
 import asyncio
-from memagent.client import AsyncElephantineClient, ElephantineLangChainMemory
+from elephantine.client import AsyncElephantineClient, ElephantineLangChainMemory
 
 async def main():
     async with AsyncElephantineClient("http://127.0.0.1:8765") as client:

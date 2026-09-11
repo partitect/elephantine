@@ -5,8 +5,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from memagent.config import settings
-from memagent.api.schemas import ToolCallExecution, WorkflowSnippet
+from elephantine.config import settings
+from elephantine.api.schemas import ToolCallExecution, WorkflowSnippet
 
 class ProceduralMemoryStore:
     """

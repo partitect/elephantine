@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from memagent.config import settings
+from elephantine.config import settings
 
 router = APIRouter()
 

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from memagent.core.embedder import OnnxCpuEmbedder
+from elephantine.core.embedder import OnnxCpuEmbedder
 
 def test_embedder_dimensions_and_norm():
     embedder = OnnxCpuEmbedder()

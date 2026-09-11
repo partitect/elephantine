@@ -4,7 +4,7 @@ import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
 from huggingface_hub import hf_hub_download
-from memagent.config import settings
+from elephantine.config import settings
 
 class OnnxCpuEmbedder:
     """

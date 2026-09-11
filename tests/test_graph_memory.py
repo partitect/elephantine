@@ -1,7 +1,7 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from memagent.api.app import app
-from memagent.core.graph_extractor import RuleBasedGraphExtractor
+from elephantine.api.app import app
+from elephantine.core.graph_extractor import RuleBasedGraphExtractor
 
 def test_graph_extractor_patterns():
     extractor = RuleBasedGraphExtractor()
