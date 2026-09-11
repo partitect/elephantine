@@ -1,3 +1,4 @@
+import re
 import json
 import uuid
 import time
@@ -12,10 +13,14 @@ from memagent.api.schemas import (
     RecallResponse,
     RecalledMemory,
     ToolCallExecution,
-    WorkflowSnippet
+    WorkflowSnippet,
+    GraphTripletSchema,
+    GraphQueryRequest,
+    GraphQueryResponse
 )
 from memagent.core.embedder import OnnxCpuEmbedder
 from memagent.core.extractor import TwoStageMemoryExtractor
+from memagent.core.graph_extractor import RuleBasedGraphExtractor
 from memagent.core.scoring import HybridScorer
 from memagent.core.conflict import ConflictResolver
 from memagent.storage.sqlite_store import SqliteMetadataStore
@@ -32,6 +37,7 @@ class ServiceContainer:
         self.procedural_store = ProceduralMemoryStore()
         self.embedder = OnnxCpuEmbedder()
         self.extractor = TwoStageMemoryExtractor()
+        self.graph_extractor = RuleBasedGraphExtractor()
         self.scorer = HybridScorer()
         self.conflict_resolver = ConflictResolver(self.sqlite_store)
 
@@ -72,6 +78,10 @@ async def remember_endpoint(
         similar_memories=candidates
     )
 
+    # Sync LanceDB vector store so deprecated memories don't pollute dense search
+    for deprecated_id in conflicts_resolved:
+        svc.lancedb_store.delete_memory(deprecated_id)
+
     expires_at = now + timedelta(hours=req.ttl_hours) if req.ttl_hours else None
     await svc.sqlite_store.insert_memory(
         memory_id=memory_id,
@@ -92,6 +102,19 @@ async def remember_endpoint(
         category=category,
         created_at_epoch=created_at_epoch
     )
+
+    # Extract knowledge graph triplets and persist in SQLite
+    triplets = svc.graph_extractor.extract_triplets(req.content)
+    for trip in triplets:
+        t_id = str(uuid.uuid4())
+        await svc.sqlite_store.insert_triplet(
+            triplet_id=t_id,
+            subject=trip.subject,
+            predicate=trip.predicate,
+            object_=trip.object,
+            source_memory_id=memory_id,
+            confidence=trip.confidence
+        )
 
     return RememberResponse(
         id=memory_id,
@@ -171,12 +194,53 @@ async def recall_endpoint(
             version=meta.get("version", 1)
         ))
 
+    # Graph Memory Enrichment: check for entity triplets mentioned in query
+    graph_triplets = []
+    query_words = [w.strip().lower() for w in re.findall(r"\w+", req.query) if len(w) > 2]
+    for w in query_words[:3]:
+        neighborhood = await svc.sqlite_store.get_entity_neighborhood(w, max_hops=1)
+        for trip in neighborhood:
+            if not any(gt.id == trip["id"] for gt in graph_triplets):
+                graph_triplets.append(GraphTripletSchema(
+                    id=trip["id"],
+                    subject=trip["subject"],
+                    predicate=trip["predicate"],
+                    object=trip["object"],
+                    source_memory_id=trip.get("source_memory_id"),
+                    confidence=trip.get("confidence", 1.0)
+                ))
+
     latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     return RecallResponse(
         query=req.query,
         total_found=len(final_memories),
         memories=final_memories,
+        graph_triplets=graph_triplets,
         latency_ms=latency_ms
+    )
+
+@router.post("/graph/query", response_model=GraphQueryResponse)
+async def query_graph_endpoint(
+    req: GraphQueryRequest,
+    svc: ServiceContainer = Depends(get_container)
+):
+    """Multi-hop knowledge graph neighborhood traversal for an entity."""
+    triplets_raw = await svc.sqlite_store.get_entity_neighborhood(req.entity, max_hops=req.max_hops)
+    formatted = [
+        GraphTripletSchema(
+            id=r["id"],
+            subject=r["subject"],
+            predicate=r["predicate"],
+            object=r["object"],
+            source_memory_id=r.get("source_memory_id"),
+            confidence=r.get("confidence", 1.0)
+        )
+        for r in triplets_raw
+    ]
+    return GraphQueryResponse(
+        entity=req.entity,
+        triplets=formatted,
+        total_triplets=len(formatted)
     )
 
 @router.post("/procedural/track")

@@ -85,3 +85,10 @@ class LanceDbVectorStore:
                 "created_at_epoch": row.get("created_at_epoch")
             })
         return formatted
+
+    def delete_memory(self, memory_id: str) -> None:
+        """Removes a superseded or soft-deprecated vector from the active vector index."""
+        try:
+            self.table.delete(f"id = '{memory_id}'")
+        except Exception:
+            pass

@@ -70,6 +70,24 @@ class SqliteMetadataStore:
                     INSERT INTO memories_fts(id, content) VALUES (new.id, new.content);
                 END;
             """)
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS graph_triplets (
+                    id TEXT PRIMARY KEY,
+                    subject TEXT NOT NULL,
+                    predicate TEXT NOT NULL,
+                    object TEXT NOT NULL,
+                    source_memory_id TEXT,
+                    confidence REAL NOT NULL DEFAULT 1.0,
+                    created_at TIMESTAMP NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    FOREIGN KEY(source_memory_id) REFERENCES memories(id) ON DELETE CASCADE
+                );
+            """)
+
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_subj ON graph_triplets(subject, is_active);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_obj ON graph_triplets(object, is_active);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_pred ON graph_triplets(predicate, is_active);")
         conn.close()
 
     async def insert_memory(
@@ -203,3 +221,88 @@ class SqliteMetadataStore:
             "unique_entities": entities,
             "db_size_kb": round(db_size_bytes / 1024, 2)
         }
+
+    async def insert_triplet(
+        self,
+        triplet_id: str,
+        subject: str,
+        predicate: str,
+        object_: str,
+        source_memory_id: Optional[str] = None,
+        confidence: float = 1.0
+    ) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            await db.execute("""
+                INSERT INTO graph_triplets (id, subject, predicate, object, source_memory_id, confidence, created_at, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            """, (triplet_id, subject.strip().lower(), predicate.strip().lower(), object_.strip().lower(), source_memory_id, confidence, now))
+            await db.commit()
+
+    async def query_graph(
+        self,
+        subject: Optional[str] = None,
+        predicate: Optional[str] = None,
+        object_: Optional[str] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        conditions = ["is_active = 1"]
+        params = []
+        if subject:
+            conditions.append("subject = ?")
+            params.append(subject.strip().lower())
+        if predicate:
+            conditions.append("predicate = ?")
+            params.append(predicate.strip().lower())
+        if object_:
+            conditions.append("object = ?")
+            params.append(object_.strip().lower())
+
+        where_clause = " AND ".join(conditions)
+        query = f"SELECT * FROM graph_triplets WHERE {where_clause} ORDER BY confidence DESC LIMIT ?"
+        params.append(limit)
+
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(query, tuple(params))
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def get_entity_neighborhood(self, entity: str, max_hops: int = 2) -> List[Dict[str, Any]]:
+        """
+        Traverses knowledge graph starting from entity up to max_hops (1 or 2 hops).
+        Returns connected edges and target nodes.
+        """
+        entity_norm = entity.strip().lower()
+        visited_triplet_ids = set()
+        results = []
+        frontier = {entity_norm}
+
+        for _ in range(max_hops):
+            if not frontier:
+                break
+            placeholders = ",".join(["?"] * len(frontier))
+            frontier_list = list(frontier)
+            query = f"""
+                SELECT * FROM graph_triplets
+                WHERE (subject IN ({placeholders}) OR object IN ({placeholders}))
+                  AND is_active = 1
+            """
+            async with aiosqlite.connect(str(self.db_path)) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(query, frontier_list + frontier_list)
+                rows = await cursor.fetchall()
+
+            next_frontier = set()
+            for r in rows:
+                tid = r["id"]
+                if tid not in visited_triplet_ids:
+                    visited_triplet_ids.add(tid)
+                    d = dict(r)
+                    results.append(d)
+                    next_frontier.add(d["subject"])
+                    next_frontier.add(d["object"])
+
+            frontier = next_frontier - {entity_norm}
+
+        return results

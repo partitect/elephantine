@@ -45,10 +45,28 @@ class RecalledMemory(BaseModel):
     created_at: datetime
     version: int
 
+class GraphTripletSchema(BaseModel):
+    id: str
+    subject: str
+    predicate: str
+    object: str
+    source_memory_id: Optional[str] = None
+    confidence: float = 1.0
+
+class GraphQueryRequest(BaseModel):
+    entity: str
+    max_hops: int = 2
+
+class GraphQueryResponse(BaseModel):
+    entity: str
+    triplets: List[GraphTripletSchema]
+    total_triplets: int
+
 class RecallResponse(BaseModel):
     query: str
     total_found: int
     memories: List[RecalledMemory]
+    graph_triplets: List[GraphTripletSchema] = Field(default_factory=list)
     latency_ms: float
 
 class ToolCallExecution(BaseModel):
