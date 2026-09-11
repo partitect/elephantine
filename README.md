@@ -76,50 +76,13 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 <a id="architecture"></a>
 ## 🏗️ Architecture
 
-```mermaid
-flowchart TD
-    subgraph Clients["Clients & Interfaces"]
-        A1["Cursor / Windsurf IDE"]
-        A2["Claude Desktop"]
-        A3["OpenAI Codex & GitHub Copilot"]
-        A4["Multi-Agent Swarm (Coder / Reviewer / Tester)"]
-        A5["WebUI Inspector (:8765/dashboard)"]
-    end
+<br/>
 
-    subgraph MCP["Protocol Layer"]
-        M1["Model Context Protocol (FastMCP)"]
-        M2["REST API (FastAPI)"]
-    end
+<div align="center">
+  <img src="docs/assets/architecture.png" alt="Elephantine Architecture - CPU-Native AI Memory Infrastructure" width="100%" />
+</div>
 
-    subgraph Engine["Elephantine Core Engine"]
-        F1["2-Stage Pre-Filter (Regex / NLP Gate)"]
-        GGUF["In-Process GGUF SLM / Regex Extractor"]
-        CR["Role Authority & LWW Conflict Resolver"]
-        ONNX["ONNX Runtime CPU Embedder (all-MiniLM-L6-v2)"]
-        GR["Graph Memory Extractor (Triplets)"]
-        SC["Hybrid Scorer (Dense + BM25 + Authority + Time Decay)"]
-    end
-
-    subgraph Storage["Host Storage Layer (Local-First)"]
-        V["LanceDB Embedded (C++ / Arrow Vectors)"]
-        SQL["SQLite WAL + FTS5 (Metadata & BM25)"]
-        GSQL["SQLite Graph Store (Subject-Predicate-Object)"]
-        PROC["Procedural Store (Tool Calls & Workflows)"]
-    end
-
-    Clients --> MCP
-    Clients --> A4
-    MCP --> Engine
-    F1 --> GGUF
-    GGUF --> ONNX
-    GGUF --> GR
-    ONNX --> CR
-    GR --> GSQL
-    CR --> Storage
-    Engine --> SC
-    Storage --> SC
-    SC --> Clients
-```
+<br/>
 
 ---
 
