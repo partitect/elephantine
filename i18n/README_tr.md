@@ -38,13 +38,9 @@
 
 ---
 
-<br/>
-
-<a href="#webui-kontrol-paneli--bilgi-grafiği">
-  <img src="https://raw.githubusercontent.com/partitect/elephantine/main/docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
-</a>
-
-<br/>
+<p align="center">
+  <img src="../docs/assets/elephantine_banner.png" alt="ELEPHANTINE: Remember - Recall - Answer" width="100%" />
+</p>
 
 </div>
 
