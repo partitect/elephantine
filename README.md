@@ -57,6 +57,7 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 
 ---
 
+<a id="why-elephantine"></a>
 ## ⚖️ Why Elephantine?
 
 | Feature / Metric | Cloud Memory / Hosted RAG | Traditional Vector DBs | 🐘 **ELEPHANTINE** |
@@ -72,6 +73,7 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 
 ---
 
+<a id="architecture"></a>
 ## 🏗️ Architecture
 
 ```mermaid
@@ -120,6 +122,7 @@ flowchart TD
 
 ---
 
+<a id="quick-start"></a>
 ## 🚀 Quick Start (30 Seconds)
 
 ### Option A: Install via pip (Recommended)
@@ -149,6 +152,7 @@ Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/das
 
 ---
 
+<a id="multi-agent-shared-workspace"></a>
 ## 👥 Multi-Agent Shared Workspace
 
 Coordinate agent teams (e.g. Coder, Tester, Architect) with persistent memory pools and hierarchical authority protection:
@@ -190,6 +194,7 @@ results = client.recall(
 
 ---
 
+<a id="webui-dashboard"></a>
 ## 🖥️ WebUI Dashboard
 
 Elephantine includes a built-in, lightweight Memory Inspector accessible at `http://localhost:8765/dashboard`:
@@ -201,6 +206,7 @@ Elephantine includes a built-in, lightweight Memory Inspector accessible at `htt
 
 ---
 
+<a id="cursor--claude-desktop-mcp"></a>
 ## 🔌 Cursor & Claude Desktop (MCP)
 
 Elephantine ships with native **Model Context Protocol (MCP)** support.
@@ -228,6 +234,7 @@ Run `python -m memagent.cli config-claude` or add this to your `claude_desktop_c
 
 ---
 
+<a id="python-sdk"></a>
 ## 💻 Python SDK & LangChain Integration
 
 Elephantine provides sync and async clients plus native LangChain memory integration:
@@ -268,6 +275,7 @@ if __name__ == "__main__":
 
 ---
 
+<a id="benchmark--performance"></a>
 ## 📈 Benchmark & Performance
 
 Tested on commodity **Ubuntu 24.04 VDS (2 vCPU / 4 GB RAM, No GPU)**:
