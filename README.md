@@ -41,7 +41,7 @@
 <br/>
 
 <a href="#webui-dashboard">
-  <img src="docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
+  <img src="https://raw.githubusercontent.com/partitect/elephantine/main/docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
 </a>
 
 <br/>

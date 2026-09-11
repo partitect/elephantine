@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="100%" height="100%" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" fill="none">
   <style>
-    .title { font-family: system-ui, -seqoe UI, sans-serif; font-weight: 700; fill: #ffffff; font-size: 20px; }
+    .title { font-family: system-ui, 'Segoe UI', sans-serif; font-weight: 700; fill: #ffffff; font-size: 20px; }
     .subtitle { font-family: system-ui, sans-serif; fill: #94a3b8; font-size: 12px; }
     .kpi-val { font-family: system-ui, sans-serif; font-weight: 800; font-size: 28px; }
     .kpi-lbl { font-family: ui-monospace, consolas, monospace; font-size: 10px; fill: #94a3b8; text-transform: uppercase; }
