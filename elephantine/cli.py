@@ -29,6 +29,23 @@ def print_cursor_config():
     print(f"  Command: {python_exec} -m elephantine.mcp.server")
     print("----------------------------------------\n")
 
+def print_codex_config():
+    """Outputs instructions for OpenAI Codex, GitHub Copilot, and VS Code / Windsurf agent integration."""
+    python_exec = sys.executable
+    config = {
+        "mcpServers": {
+            "elephantine": {
+                "command": python_exec,
+                "args": ["-m", "elephantine.mcp.server"]
+            }
+        }
+    }
+    print("\n--- OpenAI Codex / GitHub Copilot / VS Code Agent Configuration ---")
+    print("Add this to your workspace or user settings (`.vscode/settings.json` or MCP manager):")
+    print(json.dumps(config, indent=2))
+    print("REST Memory Endpoint for Codex / Copilot Extensions: http://127.0.0.1:8765/recall")
+    print("--------------------------------------------------------------------\n")
+
 def main():
     parser = argparse.ArgumentParser(description="Elephantine: Zero-GPU, Local-First, CPU-Native AI Memory Layer")
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
@@ -47,10 +64,13 @@ def main():
     # config-cursor
     subparsers.add_parser("config-cursor", help="Generate Cursor MCP setup instructions")
 
+    # config-codex
+    subparsers.add_parser("config-codex", help="Generate OpenAI Codex & GitHub Copilot / VS Code MCP config")
+
     args = parser.parse_args()
 
     if args.command == "start":
-        print(f"Starting MemAgent REST Server on http://{args.host}:{args.port}")
+        print(f"Starting Elephantine REST Server on http://{args.host}:{args.port}")
         uvicorn.run("elephantine.api.app:app", host=args.host, port=args.port, reload=False)
     elif args.command == "mcp":
         from elephantine.mcp.server import main as mcp_main
@@ -59,6 +79,8 @@ def main():
         print_claude_config()
     elif args.command == "config-cursor":
         print_cursor_config()
+    elif args.command == "config-codex":
+        print_codex_config()
     else:
         parser.print_help()
 

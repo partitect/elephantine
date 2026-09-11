@@ -20,7 +20,7 @@
   <a href="#quick-start">Quick Start</a> •
   <a href="#multi-agent-shared-workspace">Multi-Agent Workspace</a> •
   <a href="#webui-dashboard">Dashboard</a> •
-  <a href="#cursor--claude-desktop-mcp">Cursor & Claude Setup</a> •
+  <a href="#ide--agent-setup-mcp">Cursor, Codex & Claude Setup</a> •
   <a href="#python-sdk">Python SDK</a> •
   <a href="#benchmark--performance">Benchmarks</a>
 </p>
@@ -53,7 +53,7 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 - 🦙 **In-Process GGUF SLM Extraction**: Local structured memory extraction via embedded `llama-cpp-python` (`Qwen2.5-0.5B-Instruct`), requiring zero background LLM servers.
 - 🕸 **Graph Memory & Knowledge Triplets**: Native subject-predicate-object semantic graphs (`/graph/query`) integrated directly into the hybrid retrieval pipeline.
 - 🔒 **Local-First & Zero Leakage**: Embedded LanceDB (Arrow/C++) vector store + SQLite WAL. Data never leaves your host filesystem.
-- 🔌 **Native Model Context Protocol (MCP)**: Plugs directly into **Cursor Composer**, **Windsurf**, and **Claude Desktop** with a single command.
+- 🔌 **Universal Agent Support (MCP & REST)**: Plugs directly into **OpenAI Codex**, **Cursor Composer**, **GitHub Copilot**, **Windsurf**, and **Claude Desktop** with zero configuration friction.
 
 ---
 
@@ -81,8 +81,9 @@ flowchart TD
     subgraph Clients["Clients & Interfaces"]
         A1["Cursor / Windsurf IDE"]
         A2["Claude Desktop"]
-        A3["Multi-Agent Swarm (Coder / Reviewer / Tester)"]
-        A4["WebUI Inspector (:8765/dashboard)"]
+        A3["OpenAI Codex & GitHub Copilot"]
+        A4["Multi-Agent Swarm (Coder / Reviewer / Tester)"]
+        A5["WebUI Inspector (:8765/dashboard)"]
     end
 
     subgraph MCP["Protocol Layer"]
@@ -206,31 +207,48 @@ Elephantine includes a built-in, lightweight Memory Inspector accessible at `htt
 
 ---
 
+<a id="ide--agent-setup-mcp"></a>
 <a id="cursor--claude-desktop-mcp"></a>
-## 🔌 Cursor & Claude Desktop (MCP)
+## 🔌 Cursor, OpenAI Codex & Claude Desktop Setup
 
-Elephantine ships with native **Model Context Protocol (MCP)** support.
+Elephantine connects to all major agentic IDEs, coding assistants, and desktop AI clients via native **Model Context Protocol (MCP)** and high-speed local REST endpoints.
 
-### Claude Desktop Setup
-Run `python -m elephantine.cli config-claude` or add this to your `claude_desktop_config.json`:
+### 1. OpenAI Codex & GitHub Copilot (VS Code)
+For VS Code agent workflows and OpenAI Codex-powered environments:
+1. Run `elephantine config-codex` to view ready-to-paste settings.
+2. In your `.vscode/settings.json` (or MCP configuration file):
+```json
+{
+  "mcpServers": {
+    "elephantine": {
+      "command": "elephantine",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+*Or call the local REST retrieval API directly from your Codex/Copilot scripts at `http://127.0.0.1:8765/recall`.*
+
+### 2. Cursor Setup
+1. Open **Cursor Settings** -> **Features** -> **MCP Servers** -> **Add New MCP Server**.
+2. Fill in:
+   - **Name**: `elephantine`
+   - **Type**: `command`
+   - **Command**: `elephantine mcp`
+
+### 3. Claude Desktop Setup
+Run `elephantine config-claude` or add this to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "elephantine": {
-      "command": "python",
-      "args": ["-m", "elephantine.mcp.server"]
+      "command": "elephantine",
+      "args": ["mcp"]
     }
   }
 }
 ```
-
-### Cursor Setup
-1. Open **Cursor Settings** -> **Features** -> **MCP Servers** -> **Add New MCP Server**.
-2. Fill in:
-   - **Name**: `elephantine`
-   - **Type**: `command`
-   - **Command**: `python -m elephantine.mcp.server`
 
 ---
 
