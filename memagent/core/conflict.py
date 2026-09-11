@@ -16,25 +16,30 @@ class ConflictResolver:
         new_memory_id: str,
         entity_key: Optional[str],
         category: str,
-        similar_memories: List[Dict[str, Any]]
+        similar_memories: List[Dict[str, Any]],
+        workspace_id: str = "default",
+        role_authority: float = 0.5
     ) -> List[str]:
         """
         Returns list of deprecated memory IDs.
         Rules:
-        1. Exact entity_key match: If non-empty entity_key matches an existing active memory,
-           the older one is superseded by the new one (LWW).
-        2. High semantic similarity (> threshold) in same category and source agent:
-           Flags and soft-deprecates the older version to prevent duplicate/contradictory facts.
+        1. Role Authority Consensus: A new memory can only supersede an existing active memory
+           if new_authority >= existing_authority.
+        2. Exact entity_key match within the same workspace_id.
+        3. High semantic similarity (> threshold) within the same category and workspace.
         """
         deprecated_ids: List[str] = []
 
         # 1. Entity-key match resolution
         if entity_key:
-            existing_entities = await self.sqlite_store.get_active_by_entity(entity_key)
+            existing_entities = await self.sqlite_store.get_active_by_entity(entity_key, workspace_id=workspace_id)
             for old_mem in existing_entities:
                 if old_mem["id"] != new_memory_id:
-                    await self.sqlite_store.deprecate_memory(old_mem["id"], new_memory_id)
-                    deprecated_ids.append(old_mem["id"])
+                    old_auth = float(old_mem.get("role_authority", 0.5))
+                    # Only supersede if incoming authority is equal or higher
+                    if role_authority >= old_auth:
+                        await self.sqlite_store.deprecate_memory(old_mem["id"], new_memory_id)
+                        deprecated_ids.append(old_mem["id"])
 
         # 2. Semantic collision resolution (e.g. "User lives in Berlin" vs "User moved to Munich")
         for candidate in similar_memories:
@@ -49,7 +54,11 @@ class ConflictResolver:
             if sim >= self.similarity_threshold and cand_cat == category:
                 old_mem = await self.sqlite_store.get_memory_by_id(cand_id)
                 if old_mem and old_mem.get("is_active") == 1:
-                    await self.sqlite_store.deprecate_memory(cand_id, new_memory_id)
-                    deprecated_ids.append(cand_id)
+                    # Check workspace matching
+                    if old_mem.get("workspace_id", "default") == workspace_id:
+                        old_auth = float(old_mem.get("role_authority", 0.5))
+                        if role_authority >= old_auth:
+                            await self.sqlite_store.deprecate_memory(cand_id, new_memory_id)
+                            deprecated_ids.append(cand_id)
 
         return deprecated_ids

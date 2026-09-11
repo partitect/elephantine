@@ -16,13 +16,22 @@
   <a href="#why-elephantine">Why Elephantine?</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#quick-start">Quick Start</a> •
+  <a href="#multi-agent-shared-workspace">Multi-Agent Workspace</a> •
+  <a href="#webui-dashboard">Dashboard</a> •
   <a href="#cursor--claude-desktop-mcp">Cursor & Claude Setup</a> •
   <a href="#python-sdk">Python SDK</a> •
-  <a href="#benchmark--performance">Benchmarks</a> •
-  <a href="#roadmap">Roadmap</a>
+  <a href="#benchmark--performance">Benchmarks</a>
 </p>
 
 ---
+
+<br/>
+
+<a href="#webui-dashboard">
+  <img src="docs/assets/dashboard_mockup.svg" alt="Elephantine Memory Inspector Dashboard" width="100%" />
+</a>
+
+<br/>
 
 </div>
 
@@ -37,9 +46,11 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 ## ⚡ Highlights
 
 - 🏎 **100% CPU-Native Execution**: Sub-35ms recall latency on 2 vCPU servers powered by ONNX Runtime with AVX-512 SIMD thread pinning. No CUDA. No PyTorch bloat.
+- 👥 **Multi-Agent Shared Workspace**: Seamless memory pooling (`workspace_id`) across teams (Coder, Tester, Architect) with **Role-Based Authority Consensus** (`role_authority`) preventing junior agents from overwriting senior architectural decisions.
+- 📊 **Built-in WebUI Inspector**: Real-time interactive dashboard (`/dashboard`) showing live engine KPIs, memory ledgers, conflict histories, and entity graph relationships.
+- 🦙 **In-Process GGUF SLM Extraction**: Local structured memory extraction via embedded `llama-cpp-python` (`Qwen2.5-0.5B-Instruct`), requiring zero background LLM servers.
+- 🕸 **Graph Memory & Knowledge Triplets**: Native subject-predicate-object semantic graphs (`/graph/query`) integrated directly into the hybrid retrieval pipeline.
 - 🔒 **Local-First & Zero Leakage**: Embedded LanceDB (Arrow/C++) vector store + SQLite WAL. Data never leaves your host filesystem.
-- 🧠 **Procedural & Semantic Memory**: Remembers factual knowledge *and* multi-step tool execution patterns, debug traces, and error-fix workflows.
-- 🎯 **Two-Stage Pre-Filtering**: Heuristic & rule pre-filtering cuts 85-90% of chitchat before invoking extraction, keeping CPU usage virtually flat.
 - 🔌 **Native Model Context Protocol (MCP)**: Plugs directly into **Cursor Composer**, **Windsurf**, and **Claude Desktop** with a single command.
 
 ---
@@ -50,7 +61,8 @@ Legend says elephants remember watering holes across decades of shifting sands. 
 |---|---|---|---|
 | **GPU Dependency** | Mandatory / Cloud-billed | Frequently required | **Zero (100% CPU Native)** |
 | **Data Privacy** | Leaks to 3rd-party cloud | Hosted servers | **100% Host Local (Embedded)** |
-| **Memory Dimensions** | Semantic only | Vector embeddings only | **Semantic + Procedural (Tools/Errors)** |
+| **Memory Dimensions** | Semantic only | Vector embeddings only | **Semantic + Procedural + Graph** |
+| **Multi-Agent Teams** | Shared tenant silos | No built-in consensus | **Workspace Pooling + Role Authority** |
 | **Cold-Start RAM** | N/A (External service) | 1.5 GB - 4 GB+ | **< 400 MB** |
 | **Recall Latency (CPU)** | 120ms - 400ms (Network) | 50ms - 150ms | **~35ms (p50)** |
 | **Operational Cost** | $20 - $200+/mo per agent | Dedicated VM costs | **$0.00 (Runs on existing host)** |
@@ -65,7 +77,8 @@ flowchart TD
     subgraph Clients["Clients & Interfaces"]
         A1["Cursor / Windsurf IDE"]
         A2["Claude Desktop"]
-        A3["Autonomous Agent / Python SDK"]
+        A3["Multi-Agent Swarm (Coder / Reviewer / Tester)"]
+        A4["WebUI Inspector (:8765/dashboard)"]
     end
 
     subgraph MCP["Protocol Layer"]
@@ -75,23 +88,28 @@ flowchart TD
 
     subgraph Engine["Elephantine Core Engine"]
         F1["2-Stage Pre-Filter (Regex / NLP Gate)"]
-        EX["Structured Extractor & Grounding Validator"]
-        CR["LWW Conflict Resolver (Soft Deprecation)"]
+        GGUF["In-Process GGUF SLM / Regex Extractor"]
+        CR["Role Authority & LWW Conflict Resolver"]
         ONNX["ONNX Runtime CPU Embedder (all-MiniLM-L6-v2)"]
-        SC["Hybrid Scorer (Dense + BM25 + Time Decay)"]
+        GR["Graph Memory Extractor (Triplets)"]
+        SC["Hybrid Scorer (Dense + BM25 + Authority + Time Decay)"]
     end
 
     subgraph Storage["Host Storage Layer (Local-First)"]
         V["LanceDB Embedded (C++ / Arrow Vectors)"]
         SQL["SQLite WAL + FTS5 (Metadata & BM25)"]
+        GSQL["SQLite Graph Store (Subject-Predicate-Object)"]
         PROC["Procedural Store (Tool Calls & Workflows)"]
     end
 
     Clients --> MCP
+    Clients --> A4
     MCP --> Engine
-    F1 --> EX
-    EX --> ONNX
+    F1 --> GGUF
+    GGUF --> ONNX
+    GGUF --> GR
     ONNX --> CR
+    GR --> GSQL
     CR --> Storage
     Engine --> SC
     Storage --> SC
@@ -112,9 +130,63 @@ uv venv .venv
 # Windows: .venv\Scripts\activate | Linux/macOS: source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-# 3. Start the engine server
+# 3. Start the engine server & dashboard
 python -m memagent.cli start --port 8765
 ```
+
+Open your browser to [http://localhost:8765/dashboard](http://localhost:8765/dashboard) to view the live Memory Inspector!
+
+---
+
+## 👥 Multi-Agent Shared Workspace
+
+Coordinate agent teams (e.g. Coder, Tester, Architect) with persistent memory pools and hierarchical authority protection:
+
+```python
+from memagent.client import ElephantineClient
+
+# Connect to local Elephantine daemon
+client = ElephantineClient("http://127.0.0.1:8765")
+
+# 1. Lead Architect sets architectural baseline (Authority: 1.0)
+client.remember(
+    content="Database must strictly run PostgreSQL 16 with pgvector extension.",
+    category="architecture",
+    entity_key="project:db_engine",
+    workspace_id="phoenix-core",
+    role_authority=1.0
+)
+
+# 2. Junior Coder attempts to change database (Authority: 0.3)
+# -> REJECTED by Role Authority Consensus (protected against lower authority)
+client.remember(
+    content="Let's switch project database to SQLite for simplicity.",
+    category="architecture",
+    entity_key="project:db_engine",
+    workspace_id="phoenix-core",
+    role_authority=0.3
+)
+
+# 3. Tester Agent recalls workspace memories (Authority-weighted re-ranking)
+results = client.recall(
+    query="Which database engine are we using?",
+    workspace_id="phoenix-core"
+)
+
+# Output guarantees PostgreSQL 16 is preserved:
+# [architecture] (Authority: 1.0) -> Database must strictly run PostgreSQL 16...
+```
+
+---
+
+## 🖥️ WebUI Dashboard
+
+Elephantine includes a built-in, lightweight Memory Inspector accessible at `http://localhost:8765/dashboard`:
+
+- **Real-Time Memory Ledger**: Inspect active vs deprecated memories, view revision counts and superseded states.
+- **Authority & Conflict Tracking**: Monitor role-based modifications and LWW (Last-Write-Wins) deprecation chains.
+- **Knowledge Graph Viewer**: Browse extracted subject-predicate-object relationship triplets.
+- **Live Search & Filter**: Test hybrid dense + BM25 search queries interactively.
 
 ---
 
@@ -145,33 +217,39 @@ Run `python -m memagent.cli config-claude` or add this to your `claude_desktop_c
 
 ---
 
-## 💻 Python SDK
+## 💻 Python SDK & LangChain Integration
 
-Minimalist, strictly-typed async client:
+Elephantine provides sync and async clients plus native LangChain memory integration:
 
 ```python
 import asyncio
-from memagent.sdk.client import MemAgentClient
+from memagent.client import AsyncElephantineClient, ElephantineLangChainMemory
 
 async def main():
-    client = MemAgentClient("http://127.0.0.1:8765")
+    async with AsyncElephantineClient("http://127.0.0.1:8765") as client:
+        # Remember with semantic entity alignment
+        await client.remember(
+            content="User prefers pytest with async test runners.",
+            category="preference",
+            entity_key="dev:test_runner",
+            workspace_id="dev-team",
+            role_authority=0.8
+        )
 
-    # 1. Store a preference with entity alignment & conflict handling
-    await client.remember(
-        content="User prefers PostgreSQL 16 for databases and dark theme.",
-        category="preference",
-        entity_key="user:db_choice"
+        # Recall memories with time decay and workspace filtering
+        res = await client.recall(
+            query="test runner preferences",
+            workspace_id="dev-team",
+            top_k=3
+        )
+        print("Recalled:", res)
+
+    # LangChain Memory Adapter
+    chain_memory = ElephantineLangChainMemory(
+        base_url="http://127.0.0.1:8765",
+        workspace_id="dev-team"
     )
-
-    # 2. Hybrid Recall with Exponential Time-Decay
-    results = await client.recall(
-        query="What database does the user prefer?",
-        top_k=3,
-        use_time_decay=True
-    )
-
-    for memory in results["memories"]:
-        print(f"[{memory['category']}] (Score: {memory['decayed_score']:.2f}) -> {memory['content']}")
+    chain_memory.save_context({"input": "Hello"}, {"output": "I remember your preferences!"})
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -200,8 +278,10 @@ Tested on commodity **Ubuntu 24.04 VDS (2 vCPU / 4 GB RAM, No GPU)**:
 - [x] **v0.1.0**: Community Core MVP (LanceDB + SQLite WAL + ONNX Runtime).
 - [x] **v0.1.1**: Hallucination Grounding Validator & Pydantic Schema Enforcer.
 - [x] **v0.1.2**: Native FastMCP stdio/SSE server for Cursor & Claude Desktop.
-- [ ] **v0.2.0**: Embedded GGUF SLM extraction (`Qwen2.5-0.5B-Instruct` via llama.cpp).
-- [ ] **v0.3.0**: Lightweight WebUI Memory Inspector & Time-Travel Graph Visualizer.
+- [x] **v0.2.0**: Embedded GGUF SLM extraction (`Qwen2.5-0.5B-Instruct` via llama.cpp).
+- [x] **v0.2.5**: Graph Memory & Entity Triplet Extraction (`/graph/query`).
+- [x] **v0.3.0**: Lightweight WebUI Memory Inspector & Time-Travel Graph Visualizer.
+- [x] **v0.3.5**: Multi-Agent Shared Workspace & Role-Based Authority Consensus (`workspace_id`, `role_authority`).
 - [ ] **v1.0.0**: Enterprise Multi-Tenant RBAC & Cross-Agent CRDT Consensus.
 
 ---

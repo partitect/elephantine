@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="100%" height="100%" fill="none">
+  <style>
+    .title { font-family: system-ui, -seqoe UI, sans-serif; font-weight: 700; fill: #ffffff; font-size: 20px; }
+    .subtitle { font-family: system-ui, sans-serif; fill: #94a3b8; font-size: 12px; }
+    .kpi-val { font-family: system-ui, sans-serif; font-weight: 800; font-size: 28px; }
+    .kpi-lbl { font-family: ui-monospace, consolas, monospace; font-size: 10px; fill: #94a3b8; text-transform: uppercase; }
+    .table-hd { font-family: ui-monospace, consolas, monospace; font-size: 11px; fill: #94a3b8; font-weight: 600; }
+    .table-row { font-family: system-ui, sans-serif; font-size: 13px; fill: #e2e8f0; }
+    .code-badge { font-family: ui-monospace, consolas, monospace; font-size: 11px; fill: #81x8fd; }
+  </style>
+
+  <!-- Background & Window Frame -->
+  <rect width="1200" height="640" rx="16" fill="#0b0f17" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Window Top Bar -->
+  <rect width="1200" height="56" rx="16" fill="#111827" fill-opacity="0.9"/>
+  <line x1="0" y1="56" x2="1200" y2="56" stroke="#1e293b" stroke-width="1"/>
+  <circle cx="28" cy="28" r="6" fill="#e11d48"/>
+  <circle cx="48" cy="28" r="6" fill="#facc15"/>
+  <circle cx="68" cy="28" r="6" fill="#22c55e"/>
+
+  <!-- Branding -->
+  <text x="96" y="35" class="title">🐘 ELEPHANTINE</text>
+  <rect x="240" y="18" width="130" height="22" rx="4" fill="#064e3b" stroke="#10b981" stroke-width="0.8"/>
+  <text x="248" y="33" font-family="ui-monospace, monospace" font-size="10px" fill="#6ee7b7" font-weight="600">CPU-NATIVE MIMARS</text>
+  <text x="385" y="34" class="subtitle">Local-First Cognitive Memory Inspector & amp; Knowledge Graph</text>
+
+  <!-- Pulse Status Indicator -->
+  <rect x="1050" y="18" width="125" height="22" rx="4" fill="#10b981" fill-opacity="0.1" stroke="#10b981" stroke-opacity="0.5"/>
+  <circle cx="1065" cy="29" r="4" fill="#10b981"/>
+  <text x="1077" y="33" font-family="ui-monospace, monospace" font-size="10px" fill="#34d3b5" font-weight="700">LIVE ENGINE</text>
+
+  <!-- KPI Stats Cards -->
+  <g transform="translate(24, 76)">
+    <!-- Card 1 -->
+    <rect x="0" y="0" width="270" height="92" rx="10" fill="#1e293b" fill-opacity="0.5" stroke="#334155"/>
+    <text x="16" y="25" class="kpi-lbl">TOTAL MEMORIER</text>
+    <text x="16" y="58" class="kpi-val" fill="#ffffff">1,248</text>
+    <text x="16" y="79" font-family="system-ui" font-size="11px" fill="#64748b">Persisted across all agents</text>
+
+    <!-- Card 2 -->
+    <rect x="294" y="0" width="270" height="92" rx="10" fill="#1e293b" fill-opacity="0.5" stroke="#334155"/>
+    <text x="310" y="25" class="kpi-lbl">ACTIVE FACTS (VALID)</text>
+    <text x="310" y="58" class="kpi-val" fill="#34d3b5">1,104</text>
+    <text x="310" y="79" font-family="system-ui" font-size="11px" fill="#64748b">Instantly recallable in &lt;36ms</text>
+
+    <!-- Card 3 -->
+    <rect x="588" y="0" width="270" height="92" rx="10" fill="#1e293b" fill-opacity="0.5" stroke="#334155"/>
+    <text x="604" y="25" class="kpi-lbl">SOFT-DEPRECATED (LWWF)</text>
+    <text x="604" y="58" class="kpi-val" fill="#fbbf24">144</text>
+    <text x="604" y="79" font-family="system-ui" font-size="11px" fill="#64748b">Conflict authority superseded</text>
+
+
+    <!-- Card 4 -->
+    <rect x="882" y="0" width="270" height="92" rx="10" fill="#1e293b" fill-opacity="0.5" stroke="#334155"/>
+    <text x="898" y="25" class="kpi-lbl">KNOWLEDGE GRAPH EDGES</text>
+    <text x="898" y="58" class="kpi-val" fill="#818cfd">572 <tspan font-size="14px" fill="#64748b">(428 KB)</tspan></text>
+    <text x="898" y="79" font-family="system-ui" font-size="11px" fill="#64748b">Subject-Predicate-Object triplets</text>
+  </g>
+
+
+  <!-- Search & Toolbar -->
+  <g transform="translate(24, 184)">
+    <rect x="0" y="0" width="1152" height="48" rx="8" fill="#1e293b" fill-opacity="0.7" stroke="#334155"/>
+    <text x="16" y="29" font-family="system-ui" font-size="14px" fill="#94a3b8">🔅 Search by content, entity_key, workspace_id, or authority...</text>
+    <rect x="960" y="10" width="175" height="28" rx="6" fill="#064e3b" stroke="#10b981" stroke-width="0.8"/>
+    <text x="975" y="28" font-family="ui-monospace, monospace" font-size="11px" fill="#64ff87" font-weight="700">+1 Knowledge Explorer</text>
+  </g>
+
+
+  <!-- Memory Ledger Table -->
+  <g transform="translate(24, 248)">
+    <rect x="0" y="0" width="1152" height="370" rx="10" fill="#111827" fill-opacity="0.9" stroke="#1e293b"/>
+    
+    <!-- Table Header -->
+    <rect x="0" y="0" width="1152" height="40" rx="10" fill="#1e293b" fill-opacity="0.8"/>
+    <text x="20" y="25" class="table-hd">STATUS</text>
+    <text x="110" y="25" class="table-hd">ENTITY KEY</text>
+    <text x='290" y="25" class="table-hd">MEMORY CONTENT & amp; FACTS (GGUF VALIDATED)</text>
+    <text x="720" y="25" class="table-hd">WORKSPACE & amp; AGENT</text>
+    <text x="920" y="25" class="table-hd">AUTHORITY</text>
+    <text x="1040" y="25" class="table-hd" text-anchor="end">ACTIONS</text>
+    <line x1="0" y1="40" x2="1152" y2="40" stroke="#1e293b" stroke-width="1"/>
+
+    <!-- Row 1 -->
+    <g transform="translate(0, 48)">
+      <rect x="18" y="0" width="60" height="22" rx="4" fill="#064e3b"/>
+      <text x="26" y="15" font-family="ui-monospace" font-size="10px" fill="#34d3b5" font-weight="700">● Active</text>
+      <rect x="105" y="0" width="160" height="22" rx="4" fill="#311b92" fill-opacity="0.4"/>
+      <text x="112" y="15" class="code-badge">project:pt_version</text>
+      <text x="290" y="16" class="table-row">Project uses Python 3.13 strictly for free-threading mode.</text>
+      <text x="720" y="16" font-family="ui-monospace" font-size="11px" fill="#94a3b8">project-x / lead-architect</text>
+      <rect x="920" y="0" width="70" height="22" rx="4" fill="#064e3b" fill-opacity="0.5"/>
+      <text x="930" y="15" font-family="ui-monospace" font-size="10px" fill="#34d3b5" font-weight="700">1.0 (Lead)</text>
+      <rect x="985" y="-2" width="75" height="24" rx="4" fill="#e11d48" fill-opacity="0.1" stroke="#e11d48" stroke-opacity="0.5"/>
+      <text x="1022" y="14" font-family="ui-monospace" font-size="10px" fill="#fb7185" text-anchor="middle">Deprecate</text>
+    </g>
+    <line x1="0" y1="86" x2="1152" y2="86" stroke="#1e293b" stroke-width="0.8"/>
+
+    <!-- Row 2 --->
+    <g transform="translate(0, 96)">
+      <rect x="18" y="0" width="60" height="22" rx="4" fill="#064e3b"/>
+      <text x="26" y="15" font-family="ui-monospace" font-size="10px" fill="#34d3b5" font-weight="700">● Active</text>
+      <rect x="105" y="0" width="160" height="22" rx="4" fill="#311b92" fill-opacity="0.4"/>
+      <text x="112" y="15" class="code-badge">service:auth_stack,/text>
+      <text x="290" y="16" class="table-row">Fixed authentication by adding JWT (sub: auth, obj: jwt)</text>
+      <text x="720" y="16" font-family="ui-monospace" font-size="11px" fill="#94a3b8">project-x / coder-agent</text>
+      <rect x="920" y="0" width="70" height="22" rx="4" fill="#1e293b"/>
+      <text x="930" y="15" font-family="ui-monospace" font-size="10px" fill="#94a3b8" font-weight="700">0.6 (Coder)</text>
+      <rect x="985" y="-2" width="75" height="24" rx="4" fill="#e11d48" fill-opacity="0.1" stroke="#e11d48" stroke-opacity="0.5"/>
+      <text x="1022" y="14" font-family="ui-monospace" font-size="10px" fill="#fb7185" text-anchor="middle">Deprecate</text>
+    </g>
+    <line x1="0" y1="134" x2="1152" y2="134" stroke="#1e293b" stroke-width="0.8"/>
+
+    <!-- Row 3 (Reference Deprecated Version) -->
+    <g transform="translate(0, 144)">
+      <rect x="18" y="0" width="78" height="22" rx="4" fill="#1e293b"/>
+      <text x="24" y="15" font-family="ui-monospace" font-size="10px" fill="#94a3b8">◈ Deprecated</text>
+      <rect x="105" y="0" width="160" height="22" rx="4" fill="#311b92" fill-opacity="0.2"/>
+      <text x="112" y="15" class="code-badge" fill="#64748b">project:python_v</text>
+      <text x="290" y="16" class="table-row" fill="#64748b">Project uses Python 3.10 for legacy support.</text>
+      <text x="720" y="16" font-family="ui-monospace" font-size="11px" fill="#64748b">project-x / junior-dev</text>
+      <rect x="920" y="0" width="70" height="22" rx="4" fill="#1e293b"/>
+      <text x="930" y="15" font-family="ui-monospace" font-size="10px" fill="#64748b" font-weight="700">0.4 (Junior)</text>
+      <text x="1022" y="14" font-family="ui-monospace" font-size="10px" fill="#64748b" text-anchor="middle">Archived</text>
+    </g>
+    <line x1="0" y1="182" x2="1152" y2="182" stroke="#1e293b" stroke-width="0.8"/>
+
+    <!-- Row 4 -->
+    <g transform="translate(0, 192)">
+      <rect x="18" y="0" width="60" height="22" rx="4" fill="#064e3b"/>
+      <text x="26" y="15" font-family="ui-monospace" font-size="10px" fill="#34d3b5" font-weight="700">● Active</text>
+      <rect x="105" y="0" width="160" height="22" rx="4" fill="#311b92" fill-opacity="0.4"/>
+      <text x="112" y="15" class="code-badge">user:database</text>
+      <text x="290" y="16" class="table-row">User prefers Light mode and sqlite for embedded work.</text>
+      <text x="720" y="16" font-family="ui-monospace" font-size="11px" fill="#94a3b8">default / coder-agent</text>
+      <rect x="920" y="0" width="70" height="22" rx="4" fill="#1e293b"/>
+      <text x="930" y="15" font-family="ui-monospace" font-size="10px" fill="#94a3b8" font-weight="700">0.8 (Review)</text>
+      <rect x="985" y="-2" width="75" height="24" rx="4" fill="#e11d48" fill-opacity="0.1" stroke="#e11d48" stroke-opacity="0.5"/>
+      <text x="1022" y="14" font-family="ui-monospace" font-size="10px" fill="#fb7185" text-anchor="middle">Deprecate</text>
+    </g>
+
+  </g>
+</svg>

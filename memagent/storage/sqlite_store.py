@@ -38,12 +38,23 @@ class SqliteMetadataStore:
                     expires_at TIMESTAMP,
                     version INTEGER NOT NULL DEFAULT 1,
                     is_active INTEGER NOT NULL DEFAULT 1,
-                    deprecated_by TEXT
+                    deprecated_by TEXT,
+                    workspace_id TEXT NOT NULL DEFAULT 'default',
+                    role_authority REAL NOT NULL DEFAULT 0.5
                 );
             """)
 
+            # Safe schema evolution / migration for existing databases
+            cursor = conn.execute("PRAGMA table_info(memories);")
+            cols = [row[1] for row in cursor.fetchall()]
+            if "workspace_id" not in cols:
+                conn.execute("ALTER TABLE memories ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default';")
+            if "role_authority" not in cols:
+                conn.execute("ALTER TABLE memories ADD COLUMN role_authority REAL NOT NULL DEFAULT 0.5;")
+
             conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_entity ON memories(entity_key, is_active);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_source ON memories(source_agent, is_active);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace_id, is_active);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at);")
 
             conn.execute("""
@@ -100,15 +111,18 @@ class SqliteMetadataStore:
         confidence: float,
         metadata: Dict[str, Any],
         created_at: datetime,
-        expires_at: Optional[datetime] = None
+        expires_at: Optional[datetime] = None,
+        workspace_id: str = "default",
+        role_authority: float = 0.5
     ) -> None:
         async with aiosqlite.connect(str(self.db_path)) as db:
             await db.execute("PRAGMA foreign_keys=ON;")
             await db.execute("""
                 INSERT INTO memories (
                     id, content, source_agent, entity_key, category, confidence,
-                    metadata_json, created_at, updated_at, expires_at, version, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
+                    metadata_json, created_at, updated_at, expires_at, version, is_active,
+                    workspace_id, role_authority
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
             """, (
                 memory_id,
                 content,
@@ -119,18 +133,24 @@ class SqliteMetadataStore:
                 json.dumps(metadata, ensure_ascii=False),
                 created_at.isoformat(),
                 created_at.isoformat(),
-                expires_at.isoformat() if expires_at else None
+                expires_at.isoformat() if expires_at else None,
+                workspace_id,
+                role_authority
             ))
             await db.commit()
 
-    async def get_active_by_entity(self, entity_key: str) -> List[Dict[str, Any]]:
+    async def get_active_by_entity(self, entity_key: str, workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
         if not entity_key:
             return []
+        query = "SELECT * FROM memories WHERE entity_key = ? AND is_active = 1"
+        params = [entity_key]
+        if workspace_id:
+            query += " AND workspace_id = ?"
+            params.append(workspace_id)
+
         async with aiosqlite.connect(str(self.db_path)) as db:
             db.row_factory = aiosqlite.Row
-            cursor = await db.execute("""
-                SELECT * FROM memories WHERE entity_key = ? AND is_active = 1
-            """, (entity_key,))
+            cursor = await db.execute(query, tuple(params))
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 

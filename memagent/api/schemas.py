@@ -8,6 +8,8 @@ class MemoryItemBase(BaseModel):
     source_agent: str = Field(default="default", description="Originating agent or system id")
     entity_key: Optional[str] = Field(default=None, description="Optional key for entity alignment e.g. user_preference:theme")
     category: str = Field(default="general", description="Category: fact, preference, procedural, episodic")
+    workspace_id: str = Field(default="default", description="Shared workspace / team ID for multi-agent collaboration")
+    role_authority: float = Field(default=0.5, ge=0.0, le=1.0, description="Role authority weight (Senior/Lead=1.0, Reviewer=0.8, Coder=0.6, Junior=0.4)")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional custom key-value metadata")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
     ttl_hours: Optional[float] = Field(default=None, description="Optional TTL in hours before expiry")
@@ -24,6 +26,7 @@ class RememberResponse(BaseModel):
 
 class RecallRequest(BaseModel):
     query: str = Field(..., description="Query string to search memory with")
+    workspace_id: Optional[str] = Field(default=None, description="Filter memories by workspace / team ID")
     source_agent: Optional[str] = Field(default=None, description="Filter memories by specific agent")
     category: Optional[str] = Field(default=None, description="Filter memories by category")
     top_k: int = Field(default=5, ge=1, le=50, description="Maximum items to recall")
@@ -34,6 +37,8 @@ class RecalledMemory(BaseModel):
     id: str
     content: str
     source_agent: str
+    workspace_id: str = "default"
+    role_authority: float = 0.5
     entity_key: Optional[str]
     category: str
     metadata: Dict[str, Any]

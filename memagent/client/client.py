@@ -25,6 +25,8 @@ class ElephantineClient:
         category: str = "general",
         source_agent: str = "default",
         entity_key: Optional[str] = None,
+        workspace_id: str = "default",
+        role_authority: float = 0.5,
         ttl_hours: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -33,6 +35,8 @@ class ElephantineClient:
             "category": category,
             "source_agent": source_agent,
             "entity_key": entity_key,
+            "workspace_id": workspace_id,
+            "role_authority": role_authority,
             "ttl_hours": ttl_hours,
             "metadata": metadata or {}
         }
@@ -44,6 +48,7 @@ class ElephantineClient:
         self,
         query: str,
         top_k: int = 5,
+        workspace_id: Optional[str] = None,
         source_agent: Optional[str] = None,
         category: Optional[str] = None,
         alpha: float = 0.7,
@@ -52,6 +57,7 @@ class ElephantineClient:
         payload = {
             "query": query,
             "top_k": top_k,
+            "workspace_id": workspace_id,
             "source_agent": source_agent,
             "category": category,
             "alpha": alpha,
@@ -96,6 +102,8 @@ class AsyncElephantineClient:
         category: str = "general",
         source_agent: str = "default",
         entity_key: Optional[str] = None,
+        workspace_id: str = "default",
+        role_authority: float = 0.5,
         ttl_hours: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -104,6 +112,8 @@ class AsyncElephantineClient:
             "category": category,
             "source_agent": source_agent,
             "entity_key": entity_key,
+            "workspace_id": workspace_id,
+            "role_authority": role_authority,
             "ttl_hours": ttl_hours,
             "metadata": metadata or {}
         }
@@ -111,11 +121,11 @@ class AsyncElephantineClient:
         resp.raise_for_status()
         return resp.json()
 
-
     async def recall(
         self,
         query: str,
         top_k: int = 5,
+        workspace_id: Optional[str] = None,
         source_agent: Optional[str] = None,
         category: Optional[str] = None,
         alpha: float = 0.7,
@@ -124,6 +134,7 @@ class AsyncElephantineClient:
         payload = {
             "query": query,
             "top_k": top_k,
+            "workspace_id": workspace_id,
             "source_agent": source_agent,
             "category": category,
             "alpha": alpha,

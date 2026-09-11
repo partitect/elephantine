@@ -75,7 +75,9 @@ async def remember_endpoint(
         new_memory_id=memory_id,
         entity_key=entity_key,
         category=category,
-        similar_memories=candidates
+        similar_memories=candidates,
+        workspace_id=req.workspace_id,
+        role_authority=req.role_authority
     )
 
     # Sync LanceDB vector store so deprecated memories don't pollute dense search
@@ -92,7 +94,9 @@ async def remember_endpoint(
         confidence=req.confidence if req.confidence < 1.0 else extraction["confidence"],
         metadata=req.metadata,
         created_at=now,
-        expires_at=expires_at
+        expires_at=expires_at,
+        workspace_id=req.workspace_id,
+        role_authority=req.role_authority
     )
 
     svc.lancedb_store.add_vector(
@@ -172,6 +176,8 @@ async def recall_endpoint(
         if not meta or meta.get("is_active") != 1:
             continue
 
+        if req.workspace_id and meta.get("workspace_id", "default") != req.workspace_id:
+            continue
         if req.source_agent and meta.get("source_agent") != req.source_agent:
             continue
         if req.category and meta.get("category") != req.category:
@@ -182,6 +188,8 @@ async def recall_endpoint(
             id=meta["id"],
             content=meta["content"],
             source_agent=meta["source_agent"],
+            workspace_id=meta.get("workspace_id", "default"),
+            role_authority=float(meta.get("role_authority", 0.5)),
             entity_key=meta.get("entity_key"),
             category=meta["category"],
             metadata=json.loads(meta.get("metadata_json", "{}")),
@@ -193,6 +201,13 @@ async def recall_endpoint(
             created_at=created_at,
             version=meta.get("version", 1)
         ))
+
+    # Re-rank final memories by role authority (higher authority wins) combined with relevance
+    final_memories.sort(
+        key=lambda m: (m.role_authority * 0.4) + (m.decayed_score * 0.6),
+        reverse=True
+    )
+    final_memories = final_memories[:req.top_k]
 
     # Graph Memory Enrichment: check for entity triplets mentioned in query
     graph_triplets = []
