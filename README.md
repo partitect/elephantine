@@ -407,6 +407,24 @@ pytest -v tests/
 
 ---
 
+<a id="enterprise-commercial-support"></a>
+## 💼 Enterprise, Cloud & Commercial Support
+
+Are you building production agent swarms or looking for an enterprise-grade, privacy-first cognitive memory layer?
+
+| Offering | Target Audience | Features | Link |
+|---|---|---|---|
+| **Community Edition** | Developers & Builders | Apache 2.0 open-source, 100% local, zero external dependencies | [Documentation](#quick-start) |
+| **Elephantine Cloud** | Remote Developers & Teams | Cross-device memory sync, managed endpoints, automated backups | [Join Cloud Waitlist](mailto:contact@partitect.com?subject=Elephantine%20Cloud%20Waitlist) |
+| **Enterprise Edition** | Corporations, Healthcare, Fintech | On-premise deployment, SOC2/HIPAA compliance reports, SAML/SSO, Custom SLA | [Contact Enterprise](mailto:contact@partitect.com?subject=Elephantine%20Enterprise%20Inquiry) |
+| **Custom Agent Consulting** | AI Agencies & Enterprise Teams | Custom Knowledge Graph extraction, dedicated integrations, architecture audits | [Book Architecture Call](mailto:contact@partitect.com?subject=Elephantine%20Architecture%20Consulting) |
+
+> [!TIP]
+> **Need a dedicated SLA, custom memory extractor, or private on-premise deployment?**  
+> Reach out directly to our engineering team at [contact@partitect.com](mailto:contact@partitect.com).
+
+---
+
 ## 🌟 Star History
 
 <div align="center">

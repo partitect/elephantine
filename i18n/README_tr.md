@@ -376,6 +376,24 @@ pytest -v tests/
 
 ---
 
+<a id="kurumsal-ve-bulut-destegi"></a>
+## 💼 Kurumsal, Bulut ve Ticari Destek
+
+Otonom yapay zekâ ajanları inşa ediyor ve gizlilik odaklı, kurumsal seviyede bir hafıza katmanı mı arıyorsunuz?
+
+| Paket / Hizmet | Hedef Kitle | Özellikler | İletişim |
+|---|---|---|---|
+| **Community Edition** | Geliştiriciler | Apache 2.0 açık kaynak, %100 yerel ve harici bağımlılıksız | [Dokümantasyon](#hızlı-başlangıç--cli-kurulumu) |
+| **Elephantine Cloud** | Uzaktan Çalışan Ekipler | Cihazlar arası hafıza senkronizasyonu, yönetilen API, otomatik yedekleme | [Bulut Bekleme Listesine Katıl](mailto:contact@partitect.com?subject=Elephantine%20Cloud%20Waitlist) |
+| **Enterprise Edition** | Kurumlar, Sağlık, Finans, Savunma | Şirket içi (On-Premise) kurulum, SOC2/KVKK uyum raporları, SAML/SSO, Özel SLA | [Kurumsal İletişim](mailto:contact@partitect.com?subject=Elephantine%20Kurumsal%20Talep) |
+| **Özel Ajan Danışmanlığı** | Yazılım & AI Ajansları | Özel Bilgi Grafiği (Knowledge Graph) çıkarma, dahili sistem entegrasyonu | [Mimari Görüşmesi Planla](mailto:contact@partitect.com?subject=Elephantine%20Mimari%20Danismanlik) |
+
+> [!TIP]
+> **Özel bir SLA, kurumunuza özel hafıza modeli veya on-premise kurulum desteği mi gerekiyor?**  
+> Mühendislik ekibimizle doğrudan iletişime geçin: [contact@partitect.com](mailto:contact@partitect.com).
+
+---
+
 ## 🌟 Yıldız Geçmişi
 
 <div align="center">
