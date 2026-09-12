@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/elephantine_banner.png" alt="ELEPHANTINE: Remember - Recall - Answer" width="100%" />
+</p>
+
 <div align="center">
 
 # 🐘 Elephantine
@@ -37,10 +41,6 @@
 </p>
 
 ---
-
-<p align="center">
-  <img src="docs/assets/elephantine_banner.png" alt="ELEPHANTINE: Remember - Recall - Answer" width="100%" />
-</p>
 
 </div>
 

@@ -245,8 +245,11 @@ async def test_api_error_handling():
 
 def test_langchain_adapter_unit():
     """Verify LangChain ElephantineLangChainMemory interface."""
+    from starlette.testclient import TestClient
+    client = ElephantineClient(base_url="http://test")
+    client._client = TestClient(app=app, base_url="http://test")
     adapter = ElephantineLangChainMemory(
-        base_url="http://127.0.0.1:8765",
+        client=client,
         workspace_id="langchain-test-ws"
     )
     assert adapter.memory_variables == ["history"]
@@ -255,7 +258,7 @@ def test_langchain_adapter_unit():
     adapter.save_context({"input": "What is our architecture?"}, {"output": "PostgreSQL 16 on backend."})
     
     # Load variables
-    loaded = adapter.load_memory_variables({"prompt": "architecture database"})
+    loaded = adapter.load_memory_variables({"input": "architecture database"})
     assert "history" in loaded
     
     # Clear
