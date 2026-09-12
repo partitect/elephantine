@@ -78,3 +78,59 @@ async def test_enterprise_rbac_enforcement():
 
     # Reset back to community default
     settings.AUTH_ENABLED = False
+
+
+@pytest.mark.asyncio
+async def test_all_memory_routes_auth_enforcement(monkeypatch):
+    """Verify that graph, procedural, consolidation, and proactive endpoints require authentication."""
+    monkeypatch.setattr(settings, "AUTH_ENABLED", True)
+    admin_key = "test-all-routes-admin-key"
+    api_key_manager.register_key(admin_key, tenant_id="acme", roles=[ROLE_ADMIN])
+    headers = {"Authorization": f"Bearer {admin_key}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        routes_to_test = [
+            ("post", "/graph/query", {"entity": "Python"}),
+            ("post", "/procedural/track", {
+                "session_id": "sess-1",
+                "tool_name": "calc",
+                "arguments": {},
+                "result": "42",
+                "success": True,
+                "execution_time_ms": 1.0
+            }),
+            ("get", "/procedural/session/sess-1", None),
+            ("post", "/procedural/workflow", {
+                "pattern_name": "wf-test",
+                "description": "test workflow",
+                "step_sequence": [{"tool": "calc", "action": "add"}]
+            }),
+            ("get", "/procedural/workflow/wf-test", None),
+            ("post", "/memories/consolidate", {"entity_key": "dummy-key"}),
+            ("post", "/memories/prune", None),
+            ("post", "/proactive/triggers", {
+                "trigger_type": "event",
+                "condition_value": "test_event",
+                "target_agent": "test-bot",
+                "content": "Alert message"
+            }),
+            ("get", "/proactive/pending", None),
+            ("post", "/proactive/acknowledge/non-existent-trigger", None),
+        ]
+
+        for method, path, payload in routes_to_test:
+            # 1. Without credentials -> 401 Unauthorized
+            if method == "post":
+                res_unauth = await client.post(path, json=payload if payload is not None else {})
+            else:
+                res_unauth = await client.get(path)
+            assert res_unauth.status_code == 401, f"Expected 401 for unauthenticated {method.upper()} {path}, got {res_unauth.status_code}"
+
+            # 2. With valid credentials -> must NOT be 401 (e.g. 200, or 404 for non-existent item, but never 401)
+            if method == "post":
+                res_auth = await client.post(path, json=payload if payload is not None else {}, headers=headers)
+            else:
+                res_auth = await client.get(path, headers=headers)
+            assert res_auth.status_code != 401, f"Expected authenticated {method.upper()} {path} to pass auth, got 401"
+

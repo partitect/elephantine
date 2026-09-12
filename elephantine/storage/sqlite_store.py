@@ -498,32 +498,63 @@ class SqliteMetadataStore:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def mark_outbox_processed(self, memory_id: str, operation: str = "UPSERT", entry_id: Optional[str] = None) -> None:
+    async def mark_outbox_processed(
+        self,
+        memory_id: str,
+        operation: str = "UPSERT",
+        entry_id: Optional[str] = None,
+        worker_id: Optional[str] = None
+    ) -> bool:
+        """
+        Marks an outbox entry as processed with distributed worker fencing.
+        If worker_id is provided, only marks processed if the caller still holds the active lease.
+        """
         now = datetime.now(timezone.utc).isoformat()
         async with aiosqlite.connect(str(self.db_path)) as db:
-            if entry_id:
-                await db.execute("""
+            if entry_id and worker_id:
+                cursor = await db.execute("""
                     UPDATE lancedb_outbox
                     SET status = 'processed', processed_at = ?
-                    WHERE id = ?
+                    WHERE id = ? AND worker_id = ? AND status = 'in_progress'
+                """, (now, entry_id, worker_id))
+            elif entry_id:
+                cursor = await db.execute("""
+                    UPDATE lancedb_outbox
+                    SET status = 'processed', processed_at = ?
+                    WHERE id = ? AND status IN ('pending', 'in_progress')
                 """, (now, entry_id))
+            elif worker_id:
+                cursor = await db.execute("""
+                    UPDATE lancedb_outbox
+                    SET status = 'processed', processed_at = ?
+                    WHERE memory_id = ? AND operation = ? AND worker_id = ? AND status = 'in_progress'
+                """, (now, memory_id, operation, worker_id))
             else:
-                await db.execute("""
+                cursor = await db.execute("""
                     UPDATE lancedb_outbox
                     SET status = 'processed', processed_at = ?
                     WHERE memory_id = ? AND operation = ? AND status IN ('pending', 'in_progress')
                 """, (now, memory_id, operation))
             await db.commit()
+            return cursor.rowcount > 0
 
-    async def release_outbox_claim(self, entry_id: str) -> None:
-        """Releases a claimed outbox item back to pending upon failure or lease abandonment."""
+    async def release_outbox_claim(self, entry_id: str, worker_id: Optional[str] = None) -> bool:
+        """Releases a claimed outbox item back to pending upon failure or lease abandonment with worker fencing."""
         async with aiosqlite.connect(str(self.db_path)) as db:
-            await db.execute("""
-                UPDATE lancedb_outbox
-                SET status = 'pending', claimed_at = NULL, worker_id = NULL
-                WHERE id = ? AND status = 'in_progress'
-            """, (entry_id,))
+            if worker_id:
+                cursor = await db.execute("""
+                    UPDATE lancedb_outbox
+                    SET status = 'pending', claimed_at = NULL, worker_id = NULL
+                    WHERE id = ? AND worker_id = ? AND status = 'in_progress'
+                """, (entry_id, worker_id))
+            else:
+                cursor = await db.execute("""
+                    UPDATE lancedb_outbox
+                    SET status = 'pending', claimed_at = NULL, worker_id = NULL
+                    WHERE id = ? AND status = 'in_progress'
+                """, (entry_id,))
             await db.commit()
+            return cursor.rowcount > 0
 
     async def claim_pending_outbox(
         self,
@@ -543,7 +574,7 @@ class SqliteMetadataStore:
             cursor = await db.execute("""
                 SELECT id, memory_id, operation, payload_json, created_at, status, claimed_at, worker_id
                 FROM lancedb_outbox
-                WHERE status = 'pending' OR (status = 'in_progress' AND (claimed_at IS NULL OR claimed_at < ?))
+                WHERE status = 'pending' OR (status = 'in_progress' AND (claimed_at IS NULL OR claimed_at <= ?))
                 ORDER BY created_at ASC
                 LIMIT ?
             """, (threshold, limit))

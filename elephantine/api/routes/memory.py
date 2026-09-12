@@ -2,6 +2,8 @@ import re
 import json
 import uuid
 import time
+import asyncio
+import aiosqlite
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -84,12 +86,15 @@ class ServiceContainer:
                             workspace_id=payload.get("workspace_id", "default"),
                             expires_at_epoch=payload.get("expires_at_epoch", 0.0)
                         )
-                await self.sqlite_store.mark_outbox_processed(mem_id, op, entry_id=entry_id)
-                replayed += 1
+                marked = await self.sqlite_store.mark_outbox_processed(mem_id, op, entry_id=entry_id, worker_id=wid)
+                if marked:
+                    replayed += 1
+                else:
+                    logger.warning(f"Worker {wid} lost lease for outbox entry {entry_id} before completion.")
             except Exception as e:
                 logger.error(f"Failed to replay outbox entry {entry_id} for memory {mem_id}: {e}", exc_info=True)
                 try:
-                    await self.sqlite_store.release_outbox_claim(entry_id)
+                    await self.sqlite_store.release_outbox_claim(entry_id, worker_id=wid)
                 except Exception:
                     pass
         return replayed
@@ -465,7 +470,8 @@ async def recall_endpoint(
 @router.post("/graph/query", response_model=GraphQueryResponse)
 async def query_graph_endpoint(
     req: GraphQueryRequest,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     """Multi-hop knowledge graph neighborhood traversal for an entity."""
     triplets_raw = await svc.sqlite_store.get_entity_neighborhood(req.entity, max_hops=req.max_hops)
@@ -489,7 +495,8 @@ async def query_graph_endpoint(
 @router.post("/procedural/track")
 async def track_tool_call(
     call: ToolCallExecution,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     call_id = await svc.procedural_store.record_tool_call(call)
     return {"status": "recorded", "call_id": call_id}
@@ -497,7 +504,8 @@ async def track_tool_call(
 @router.get("/procedural/session/{session_id}")
 async def get_session_tool_calls(
     session_id: str,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     history = await svc.procedural_store.get_session_history(session_id)
     return {"session_id": session_id, "executions": history}
@@ -505,7 +513,8 @@ async def get_session_tool_calls(
 @router.post("/procedural/workflow")
 async def save_workflow(
     workflow: WorkflowSnippet,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     wf_id = await svc.procedural_store.save_or_update_workflow(
         pattern_name=workflow.pattern_name,
@@ -518,7 +527,8 @@ async def save_workflow(
 @router.get("/procedural/workflow/{pattern_name}")
 async def get_workflow(
     pattern_name: str,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     wf = await svc.procedural_store.get_workflow(pattern_name)
     if not wf:
@@ -528,15 +538,28 @@ async def get_workflow(
 @router.post("/memories/consolidate", response_model=ConsolidateResponse)
 async def consolidate_memories_endpoint(
     req: ConsolidateRequest,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     """
     Consolidates fragmented facts for an entity into a unified canonical summary,
     preventing long-term memory bloat.
     """
+    target_ws = req.workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        target_ws = req.workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
+
     res = await svc.consolidator.consolidate_entity(
         entity_key=req.entity_key,
-        workspace_id=req.workspace_id
+        workspace_id=eff_ws
     )
     if not res:
         return ConsolidateResponse(
@@ -556,19 +579,32 @@ async def consolidate_memories_endpoint(
 async def prune_memories_endpoint(
     older_than_days: int = Query(default=30, ge=1),
     workspace_id: Optional[str] = Query(default=None),
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     """
     Prunes deprecated/superseded memories older than N days from storage.
     """
+    target_ws = workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        target_ws = workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
+
     pruned_count = await svc.consolidator.prune_all_inactive(
         older_than_days=older_than_days,
-        workspace_id=workspace_id
+        workspace_id=eff_ws
     )
     return PruneResponse(
         pruned_count=pruned_count,
         older_than_days=older_than_days,
-        workspace_id=workspace_id,
+        workspace_id=target_ws,
         message=f"Pruned {pruned_count} deprecated memories older than {older_than_days} days."
     )
 
@@ -579,12 +615,25 @@ async def prune_memories_endpoint(
 @router.post("/proactive/triggers", response_model=ProactiveTriggerResponse)
 async def create_proactive_trigger_endpoint(
     req: ProactiveTriggerCreate,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     """
     Registers a proactive memory trigger. If content is provided without memory_id,
     persists a memory item first and attaches the trigger to it.
     """
+    target_ws = req.workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        target_ws = req.workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
+
     memory_id = req.memory_id
     now = datetime.now(timezone.utc)
 
@@ -602,7 +651,7 @@ async def create_proactive_trigger_endpoint(
             confidence=1.0,
             metadata={"trigger_condition": req.condition_value},
             created_at=now,
-            workspace_id=req.workspace_id,
+            workspace_id=eff_ws,
             role_authority=0.8
         )
         svc.lancedb_store.add_vector(
@@ -610,7 +659,8 @@ async def create_proactive_trigger_endpoint(
             vector=vec,
             source_agent=req.target_agent,
             category="proactive",
-            created_at_epoch=now.timestamp()
+            created_at_epoch=now.timestamp(),
+            workspace_id=eff_ws
         )
 
     next_trigger_at, _ = parse_trigger_condition(
@@ -626,7 +676,7 @@ async def create_proactive_trigger_endpoint(
         trigger_type=req.trigger_type,
         condition_value=req.condition_value,
         target_agent=req.target_agent,
-        workspace_id=req.workspace_id,
+        workspace_id=eff_ws,
         webhook_url=req.webhook_url,
         next_trigger_at=next_trigger_at
     )
@@ -643,14 +693,27 @@ async def create_proactive_trigger_endpoint(
 async def get_pending_proactive_alerts(
     target_agent: str = Query(default="default"),
     workspace_id: Optional[str] = Query(default=None),
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     """
     Fetches unacknowledged proactive alerts for an agent (pull-based check-in).
     """
+    target_ws = workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        target_ws = workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
+
     triggers = await svc.sqlite_store.get_pending_triggers_for_agent(
         target_agent=target_agent,
-        workspace_id=workspace_id
+        workspace_id=eff_ws
     )
     alerts = []
     for t in triggers:
@@ -672,11 +735,33 @@ async def get_pending_proactive_alerts(
 @router.post("/proactive/acknowledge/{trigger_id}")
 async def acknowledge_proactive_alert(
     trigger_id: str,
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_write_permission)
 ):
     """
     Marks a proactive trigger alert as acknowledged by the receiving agent.
     """
+    async with aiosqlite.connect(str(svc.sqlite_store.db_path)) as db:
+        db.row_factory = aiosqlite.Row
+        c = await db.execute("""
+            SELECT pa.* FROM proactive_alerts pa
+            WHERE (pa.id = ? OR pa.trigger_id = ?) AND pa.status = 'pending'
+        """, (trigger_id, trigger_id))
+        alert = await c.fetchone()
+        if not alert:
+            raise HTTPException(status_code=404, detail="Alert not found or already acknowledged.")
+
+        ws = alert["workspace_id"] or "default"
+        raw_ws = ws
+        if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+            prefix = f"{_auth.tenant_id}:"
+            if not ws.startswith(prefix):
+                raise HTTPException(status_code=403, detail="Forbidden: Alert belongs to another tenant.")
+            raw_ws = ws[len(prefix):]
+
+        if "*" not in _auth.allowed_workspaces and raw_ws not in _auth.allowed_workspaces:
+            raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{raw_ws}'.")
+
     success = await svc.sqlite_store.acknowledge_trigger(trigger_id)
     if not success:
         raise HTTPException(status_code=404, detail="Alert not found or already acknowledged.")
@@ -684,7 +769,8 @@ async def acknowledge_proactive_alert(
 
 @router.get("/proactive/stream")
 async def stream_proactive_alerts(
-    svc: ServiceContainer = Depends(get_container)
+    svc: ServiceContainer = Depends(get_container),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     """
     Server-Sent Events (SSE) stream allowing agents to listen in real time for proactive alerts.

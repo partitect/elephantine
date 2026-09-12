@@ -448,6 +448,67 @@ async def test_outbox_distributed_lease_concurrency():
     assert not any(p["id"] in (item_a["id"], item_b["id"]) for p in pending_now)
 
 
+@pytest.mark.asyncio
+async def test_outbox_worker_fencing():
+    """Verify that worker fencing prevents stale workers whose lease expired from writing outbox completions."""
+    import uuid
+    from datetime import datetime, timezone
+    from elephantine.api.routes.memory import get_container
+
+    svc = get_container()
+    store = svc.sqlite_store
+    uid = uuid.uuid4().hex[:8]
+    mem_id = f"mem-fence-{uid}"
+    ws = f"ws-fence-{uid}"
+    now = datetime.now(timezone.utc)
+
+    # Mark any preexisting outbox items from earlier test runs as processed
+    import aiosqlite
+    async with aiosqlite.connect(str(store.db_path)) as db:
+        await db.execute("UPDATE lancedb_outbox SET status = 'processed'")
+        await db.commit()
+
+    # Insert memory to produce outbox record
+    await store.insert_memory(
+        memory_id=mem_id,
+        content="Fenced outbox test.",
+        source_agent="fence-bot",
+        entity_key=f"fence-{uid}",
+        category="fact",
+        confidence=1.0,
+        metadata={},
+        created_at=now,
+        workspace_id=ws
+    )
+
+    # Worker 1 claims item
+    claimed_1 = await store.claim_pending_outbox(worker_id="worker-stale", limit=1, lease_duration_seconds=60)
+    assert len(claimed_1) == 1
+    item = claimed_1[0]
+    entry_id = item["id"]
+
+    # Simulate lease expiration: Worker 1 stalled and claimed_at is now older than lease TTL
+    from datetime import timedelta
+    past_claimed_at = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+    async with aiosqlite.connect(str(store.db_path)) as db:
+        await db.execute("UPDATE lancedb_outbox SET claimed_at = ? WHERE id = ?", (past_claimed_at, entry_id))
+        await db.commit()
+
+    # Lease has expired, so Worker 2 steals/claims it
+    claimed_2 = await store.claim_pending_outbox(worker_id="worker-fresh", limit=1, lease_duration_seconds=60)
+    assert len(claimed_2) == 1
+    assert claimed_2[0]["id"] == entry_id
+
+    # Now stale Worker 1 attempts to mark it processed -> must return False (fenced out!)
+    marked_stale = await store.mark_outbox_processed(mem_id, "UPSERT", entry_id=entry_id, worker_id="worker-stale")
+    assert marked_stale is False
+
+    # Fresh Worker 2 marks it processed -> must return True
+    marked_fresh = await store.mark_outbox_processed(mem_id, "UPSERT", entry_id=entry_id, worker_id="worker-fresh")
+    assert marked_fresh is True
+
+
+
 
 @pytest.mark.asyncio
 async def test_changed_since_query_filtering():
