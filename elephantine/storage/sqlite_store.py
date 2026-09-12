@@ -211,10 +211,26 @@ class SqliteMetadataStore:
             await db.commit()
             return cursor.rowcount > 0
 
-    async def search_bm25(self, query: str, top_k: int = 20) -> List[Dict[str, Any]]:
+    async def search_bm25(
+        self,
+        query: str,
+        top_k: int = 20,
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         sanitized = " ".join([f'"{part}"' for part in query.replace('"', '').split() if part.isalnum()])
         if not sanitized:
             return []
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        conditions = ["memories_fts MATCH ?", "m.is_active = 1", "(m.expires_at IS NULL OR m.expires_at > ?)"]
+        params: List[Any] = [sanitized, now_iso]
+
+        if workspace_id:
+            conditions.append("m.workspace_id = ?")
+            params.append(workspace_id)
+
+        params.append(top_k)
+        where_clause = " AND ".join(conditions)
 
         async with aiosqlite.connect(str(self.db_path)) as db:
             db.row_factory = aiosqlite.Row
@@ -222,10 +238,10 @@ class SqliteMetadataStore:
                 SELECT m.*, bm25(memories_fts) as bm25_rank
                 FROM memories_fts f
                 JOIN memories m ON m.id = f.id
-                WHERE memories_fts MATCH ? AND m.is_active = 1
+                WHERE {where_clause}
                 ORDER BY bm25_rank ASC
                 LIMIT ?
-            """, (sanitized, top_k))
+            """, params)
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 

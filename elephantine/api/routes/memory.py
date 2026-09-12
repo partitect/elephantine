@@ -115,12 +115,15 @@ async def remember_endpoint(
         role_authority=req.role_authority
     )
 
+    expires_at_epoch = expires_at.timestamp() if expires_at else 0.0
     svc.lancedb_store.add_vector(
         memory_id=memory_id,
         vector=vector,
         source_agent=req.source_agent,
         category=category,
-        created_at_epoch=created_at_epoch
+        created_at_epoch=created_at_epoch,
+        workspace_id=req.workspace_id,
+        expires_at_epoch=expires_at_epoch
     )
 
     # Extract knowledge graph triplets and persist in SQLite
@@ -151,12 +154,14 @@ async def recall_endpoint(
     _auth: TenantContext = Depends(require_read_permission)
 ):
     """
-    1. Dense Vector search via LanceDB.
-    2. BM25 search via SQLite FTS5.
+    1. Dense Vector search via LanceDB with native workspace_id and TTL pre-filtering.
+    2. BM25 search via SQLite FTS5 with workspace_id and TTL filtering.
     3. Hybrid scoring fusion & Exponential temporal decay.
     4. Batch SQLite metadata retrieval.
     """
     t0 = time.perf_counter()
+    now_epoch = datetime.now(timezone.utc).timestamp()
+    now_iso = datetime.now(timezone.utc).isoformat()
 
     query_vector = svc.embedder.embed_text(req.query)
 
@@ -164,12 +169,15 @@ async def recall_endpoint(
         query_vector=query_vector,
         top_k=settings.DENSE_SEARCH_TOP_K,
         source_agent=req.source_agent,
-        category=req.category
+        category=req.category,
+        workspace_id=req.workspace_id,
+        current_epoch=now_epoch
     )
 
     bm25_results = await svc.sqlite_store.search_bm25(
         query=req.query,
-        top_k=settings.BM25_SEARCH_TOP_K
+        top_k=settings.BM25_SEARCH_TOP_K,
+        workspace_id=req.workspace_id
     )
 
     ranked = svc.scorer.fuse_and_rank(
@@ -193,14 +201,33 @@ async def recall_endpoint(
         if not meta or meta.get("is_active") != 1:
             continue
 
+        # TTL check: filter out expired memories
+        if meta.get("expires_at") and meta["expires_at"] <= now_iso:
+            continue
+
+        created_at = datetime.fromisoformat(meta["created_at"])
+        updated_at = datetime.fromisoformat(meta.get("updated_at", meta["created_at"]))
+
+        # Temporal as_of filtering: only include memories created on or before as_of
+        if req.as_of:
+            req_as_of = req.as_of if req.as_of.tzinfo else req.as_of.replace(tzinfo=timezone.utc)
+            item_created = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+            if item_created > req_as_of:
+                continue
+
+        # Audit changed_since filtering: only include memories updated/created after changed_since
+        if req.changed_since:
+            req_since = req.changed_since if req.changed_since.tzinfo else req.changed_since.replace(tzinfo=timezone.utc)
+            item_updated = updated_at if updated_at.tzinfo else updated_at.replace(tzinfo=timezone.utc)
+            if item_updated < req_since:
+                continue
+
         if req.workspace_id and meta.get("workspace_id", "default") != req.workspace_id:
             continue
         if req.source_agent and meta.get("source_agent") != req.source_agent:
             continue
         if req.category and meta.get("category") != req.category:
             continue
-
-        created_at = datetime.fromisoformat(meta["created_at"])
         final_memories.append(RecalledMemory(
             id=meta["id"],
             content=meta["content"],

@@ -26,10 +26,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
+    # Production-hardened CORS: if origins is wildcard, disable allow_credentials to adhere to browser spec
+    allow_all = "*" in settings.CORS_ORIGINS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=not allow_all,
         allow_methods=["*"],
         allow_headers=["*"],
     )

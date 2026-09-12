@@ -22,17 +22,48 @@ class OnnxCpuEmbedder:
         self._initialize()
 
     def _initialize(self):
-        onnx_file = hf_hub_download(
-            repo_id=self.model_repo,
-            filename="onnx/model.onnx",
-            subfolder="",
-            cache_dir=str(self.cache_dir)
-        )
-        tokenizer_file = hf_hub_download(
-            repo_id=self.model_repo,
-            filename="tokenizer.json",
-            cache_dir=str(self.cache_dir)
-        )
+        # 1. Check if user configured a local offline model path
+        local_dir = settings.LOCAL_MODEL_PATH or (self.cache_dir / "local")
+        local_onnx = local_dir / "model.onnx"
+        local_tokenizer = local_dir / "tokenizer.json"
+
+        if local_onnx.exists() and local_tokenizer.exists():
+            onnx_file = str(local_onnx)
+            tokenizer_file = str(local_tokenizer)
+        else:
+            if settings.OFFLINE_MODE:
+                raise FileNotFoundError(
+                    f"Elephantine is in OFFLINE_MODE, but no local model files found at {local_dir}. "
+                    "Please provide model.onnx and tokenizer.json."
+                )
+            try:
+                onnx_file = hf_hub_download(
+                    repo_id=self.model_repo,
+                    filename="onnx/model.onnx",
+                    subfolder="",
+                    cache_dir=str(self.cache_dir),
+                    local_files_only=settings.OFFLINE_MODE
+                )
+                tokenizer_file = hf_hub_download(
+                    repo_id=self.model_repo,
+                    filename="tokenizer.json",
+                    cache_dir=str(self.cache_dir),
+                    local_files_only=settings.OFFLINE_MODE
+                )
+            except Exception as e:
+                # If cached previously, allow loading from offline cache
+                onnx_file = hf_hub_download(
+                    repo_id=self.model_repo,
+                    filename="onnx/model.onnx",
+                    cache_dir=str(self.cache_dir),
+                    local_files_only=True
+                )
+                tokenizer_file = hf_hub_download(
+                    repo_id=self.model_repo,
+                    filename="tokenizer.json",
+                    cache_dir=str(self.cache_dir),
+                    local_files_only=True
+                )
 
         self.tokenizer = Tokenizer.from_file(tokenizer_file)
         self.tokenizer.enable_truncation(max_length=256)

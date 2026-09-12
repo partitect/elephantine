@@ -32,6 +32,8 @@ class RecallRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50, description="Maximum items to recall")
     use_time_decay: bool = Field(default=True, description="Apply exponential temporal recency decay")
     alpha: float = Field(default=0.7, ge=0.0, le=1.0, description="Weight between dense vector and sparse BM25")
+    as_of: Optional[datetime] = Field(default=None, description="Temporal recall: return memories valid as of this point in time")
+    changed_since: Optional[datetime] = Field(default=None, description="Audit recall: return memories created or updated since this timestamp")
 
 class RecalledMemory(BaseModel):
     id: str

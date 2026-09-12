@@ -86,3 +86,53 @@ async def test_role_authority_consensus_protection():
         # The active authoritative one must be Python 3.13
         assert "3.13" in rec_data["memories"][0]["content"]
         assert rec_data["memories"][0]["role_authority"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_ttl_expiry_and_temporal_recall():
+    """Verify that memories with expired TTL are filtered out and temporal filters work."""
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        ws = "ttl-lifecycle-test"
+
+        # 1. Store a short TTL memory (e.g. 0.0001 hours = ~0.36 seconds)
+        t_resp = await client.post("/remember", json={
+            "content": "Temporary token ABC-123 valid for 5 seconds.",
+            "category": "credential_ref",
+            "workspace_id": ws,
+            "ttl_hours": 0.0001
+        })
+        assert t_resp.status_code == 200
+        mem_id = t_resp.json()["id"]
+
+        # 2. Store a permanent memory
+        p_resp = await client.post("/remember", json={
+            "content": "Permanent master architecture decision: microkernel design.",
+            "category": "architecture",
+            "workspace_id": ws
+        })
+        assert p_resp.status_code == 200
+
+        # Wait 1 second for TTL to expire
+        await asyncio.sleep(1.0)
+
+        # 3. Recall: temporary memory must NOT be returned because it expired
+        rec = await client.post("/recall", json={
+            "query": "Temporary token ABC-123",
+            "workspace_id": ws,
+            "top_k": 5
+        })
+        assert rec.status_code == 200
+        recalled_ids = [m["id"] for m in rec.json()["memories"]]
+        assert mem_id not in recalled_ids
+
+        # Permanent memory must still be recalled
+        rec_perm = await client.post("/recall", json={
+            "query": "Permanent master architecture decision",
+            "workspace_id": ws,
+            "top_k": 5
+        })
+        assert rec_perm.status_code == 200
+        assert any("microkernel" in m["content"] for m in rec_perm.json()["memories"])

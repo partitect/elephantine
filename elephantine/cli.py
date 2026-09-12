@@ -288,6 +288,15 @@ def main():
     tp_parser.add_argument("--workspace", default=None, help="Workspace ID (auto-detected if omitted)")
     tp_parser.add_argument("--base-url", default=f"http://{settings.HOST}:{settings.PORT}", help="Elephantine server URL")
 
+    # cache-models CLI (for full offline / zero-network air-gapped readiness)
+    subparsers.add_parser("cache-models", help="Pre-download and cache embedding models for 100% offline usage")
+
+    # import-memanto CLI (lossless migration from Memanto exports)
+    im_parser = subparsers.add_parser("import-memanto", help="Losslessly import memories from a Memanto JSON export")
+    im_parser.add_argument("file", help="Path to Memanto export JSON file")
+    im_parser.add_argument("--workspace", default=None, help="Target workspace ID (auto-detected if omitted)")
+    im_parser.add_argument("--base-url", default=f"http://{settings.HOST}:{settings.PORT}", help="Elephantine server URL")
+
     args = parser.parse_args()
 
     if args.command == "start":
@@ -335,6 +344,41 @@ def main():
         for a in alerts:
             print(f"  - [{a.get('trigger_id')}] \"{a.get('content')}\" (Condition: {a.get('condition')})")
         print()
+    elif args.command == "cache-models":
+        print(f"Pre-caching ONNX embedding model '{settings.EMBEDDING_MODEL_NAME}' to {settings.ONN_MODELS_CACHE_DIR}...")
+        from elephantine.core.embedder import OnnxCpuEmbedder
+        embedder = OnnxCpuEmbedder()
+        v = embedder.embed_text("warmup test")
+        print(f"✓ Model successfully cached and verified offline-ready. Embedding dim: {len(v)}.")
+    elif args.command == "import-memanto":
+        from elephantine.client import ElephantineClient
+        ws = args.workspace or detect_project_workspace()
+        c = ElephantineClient(args.base_url)
+        path = Path(args.file)
+        if not path.exists():
+            print(f"Error: File '{args.file}' not found.")
+            sys.exit(1)
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        items = data if isinstance(data, list) else data.get("memories", data.get("items", []))
+        print(f"Importing {len(items)} Memanto memories into workspace '{ws}'...")
+        count = 0
+        for it in items:
+            content = it.get("content") or it.get("fact") or it.get("text", "")
+            if not content:
+                continue
+            cat = it.get("category") or it.get("type", "fact")
+            c.remember(
+                content=content,
+                category=cat,
+                entity_key=it.get("entity_key") or it.get("key"),
+                source_agent=it.get("source_agent") or it.get("agent_id", "memanto_import"),
+                workspace_id=ws,
+                role_authority=float(it.get("role_authority", it.get("authority", 0.5))),
+                metadata=it.get("metadata", {})
+            )
+            count += 1
+        print(f"✓ Successfully imported {count} memories from Memanto into Elephantine!")
     elif args.command == "config-antigravity":
         print_antigravity_config()
     elif args.command == "config-claude":

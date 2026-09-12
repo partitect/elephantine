@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_DIM: int = 384
     ONN_MODELS_CACHE_DIR: Path = Path("./data/models")
+    LOCAL_MODEL_PATH: Optional[Path] = None
+    OFFLINE_MODE: bool = False
     ONNX_INTRA_OP_NUM_THREADS: int = 2
     ONNX_INTER_OP_NUM_THREADS: int = 1
 
@@ -41,6 +43,7 @@ class Settings(BaseSettings):
     # Enterprise & RBAC Settings
     AUTH_ENABLED: bool = False
     API_KEYS_JSON: str = "{}"
+    CORS_ORIGINS: list[str] = ["*"]
 
 
     @property
