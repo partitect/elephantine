@@ -56,6 +56,36 @@ class ServiceContainer:
         self.consolidator = MemoryConsolidator(self.sqlite_store)
         self.proactive_engine = ProactiveEngine(self.sqlite_store)
 
+    async def replay_pending_outbox(self) -> int:
+        """Sweeps and replays any pending transactional outbox writes to LanceDB."""
+        try:
+            pending = await self.sqlite_store.get_pending_outbox()
+            replayed = 0
+            for entry in pending:
+                op = entry["operation"]
+                mem_id = entry["memory_id"]
+                if op == "UPSERT":
+                    payload = json.loads(entry["payload_json"])
+                    mem = await self.sqlite_store.get_memory_by_id(mem_id)
+                    if mem and mem.get("content"):
+                        vec = self.embedder.embed_text(mem["content"])
+                        self.lancedb_store.add_vector(
+                            memory_id=mem_id,
+                            vector=vec,
+                            source_agent=payload.get("source_agent", "unknown"),
+                            category=payload.get("category", "general"),
+                            created_at_epoch=payload.get("created_at_epoch", 0.0),
+                            workspace_id=payload.get("workspace_id", "default"),
+                            expires_at_epoch=payload.get("expires_at_epoch", 0.0)
+                        )
+                elif op == "DELETE":
+                    self.lancedb_store.delete_memory(mem_id)
+                await self.sqlite_store.mark_outbox_processed(mem_id, op)
+                replayed += 1
+            return replayed
+        except Exception:
+            return 0
+
 _container: Optional[ServiceContainer] = None
 
 def get_container() -> ServiceContainer:
@@ -87,10 +117,21 @@ async def remember_endpoint(
             detail=f"Forbidden: Caller is not authorized for workspace '{req.workspace_id}'."
         )
 
-    extraction = svc.extractor.extract_structured(req.content, default_category=req.category)
-    entity_key = req.entity_key or extraction["entity_key"]
-    category = extraction["category"]
-    content = extraction["cleaned_content"]
+    # Multi-tenant storage namespace partition
+    effective_ws = f"{auth_ctx.tenant_id}:{req.workspace_id}" if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant" else req.workspace_id
+
+    # Verbatim / Raw preservation for exact imports or explicit categories
+    if req.metadata.get("_exact") or req.category != "general":
+        category = req.category
+        content = req.content
+        entity_key = req.entity_key
+        conf = req.confidence
+    else:
+        extraction = svc.extractor.extract_structured(req.content, default_category=req.category)
+        entity_key = req.entity_key or extraction["entity_key"]
+        category = extraction["category"]
+        content = extraction["cleaned_content"]
+        conf = req.confidence if req.confidence < 1.0 else extraction["confidence"]
 
     vector = svc.embedder.embed_text(content)
     now = req.created_at or datetime.now(timezone.utc)
@@ -99,13 +140,13 @@ async def remember_endpoint(
     created_at_epoch = now.timestamp()
     memory_id = req.custom_id or str(uuid.uuid4())
 
-    candidates = svc.lancedb_store.search_similar(vector, top_k=10)
+    candidates = svc.lancedb_store.search_similar(vector, top_k=10, workspace_id=effective_ws)
     conflicts_resolved = await svc.conflict_resolver.detect_and_resolve_conflicts(
         new_memory_id=memory_id,
         entity_key=entity_key,
         category=category,
         similar_memories=candidates,
-        workspace_id=req.workspace_id,
+        workspace_id=effective_ws,
         role_authority=effective_authority
     )
 
@@ -121,11 +162,11 @@ async def remember_endpoint(
         source_agent=req.source_agent,
         entity_key=entity_key,
         category=category,
-        confidence=req.confidence if req.confidence < 1.0 else extraction["confidence"],
+        confidence=conf,
         metadata=req.metadata,
         created_at=now,
         expires_at=expires_at,
-        workspace_id=req.workspace_id,
+        workspace_id=effective_ws,
         role_authority=effective_authority
     )
 
@@ -136,7 +177,7 @@ async def remember_endpoint(
         source_agent=req.source_agent,
         category=category,
         created_at_epoch=created_at_epoch,
-        workspace_id=req.workspace_id,
+        workspace_id=effective_ws,
         expires_at_epoch=expires_at_epoch
     )
     await svc.sqlite_store.mark_outbox_processed(memory_id, "UPSERT")
@@ -182,6 +223,9 @@ async def recall_endpoint(
             detail=f"Forbidden: Caller is not authorized to recall from workspace '{req.workspace_id}'."
         )
 
+    # Multi-tenant storage namespace partition
+    effective_ws = f"{auth_ctx.tenant_id}:{req.workspace_id}" if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant" and req.workspace_id else req.workspace_id
+
     t0 = time.perf_counter()
     now_epoch = datetime.now(timezone.utc).timestamp()
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -189,7 +233,7 @@ async def recall_endpoint(
     # 1. True Time-Travel pathway: if as_of is requested, reconstruct historical state from event ledger
     if req.as_of:
         req_as_of_iso = (req.as_of if req.as_of.tzinfo else req.as_of.replace(tzinfo=timezone.utc)).isoformat()
-        past_records = await svc.sqlite_store.get_memories_as_of(req_as_of_iso, workspace_id=req.workspace_id)
+        past_records = await svc.sqlite_store.get_memories_as_of(req_as_of_iso, workspace_id=effective_ws)
         if req.source_agent:
             past_records = [r for r in past_records if r.get("source_agent") == req.source_agent]
         if req.category:
@@ -215,13 +259,13 @@ async def recall_endpoint(
                 entity_key=meta.get("entity_key"),
                 category=meta["category"],
                 metadata=json.loads(meta.get("metadata_json", "{}")),
-                confidence=1.0,
+                confidence=float(meta.get("confidence", 1.0)),
                 vector_score=1.0,
                 bm25_score=1.0,
                 hybrid_score=1.0,
                 decayed_score=1.0,
                 created_at=c_at,
-                version=1
+                version=int(meta.get("version", 1))
             ))
         latency = (time.perf_counter() - t0) * 1000
         return RecallResponse(
@@ -235,11 +279,20 @@ async def recall_endpoint(
     # 2. True Audit pathway: if changed_since is requested, return all mutations from event ledger
     if req.changed_since:
         req_since_iso = (req.changed_since if req.changed_since.tzinfo else req.changed_since.replace(tzinfo=timezone.utc)).isoformat()
-        audit_events = await svc.sqlite_store.get_events_since(req_since_iso, workspace_id=req.workspace_id)
+        audit_events = await svc.sqlite_store.get_events_since(req_since_iso, workspace_id=effective_ws)
         if req.source_agent:
             audit_events = [e for e in audit_events if e.get("source_agent") == req.source_agent]
         if req.category:
             audit_events = [e for e in audit_events if e.get("category") == req.category]
+
+        if req.query and req.query.strip():
+            query_words = [w.lower() for w in req.query.split() if len(w) > 2]
+            if query_words:
+                def score_audit(e):
+                    text = (e["content"] + " " + (e.get("entity_key") or "") + " " + e.get("category", "")).lower()
+                    return sum(1.0 for w in query_words if w in text)
+                audit_events = [e for e in audit_events if score_audit(e) > 0]
+                audit_events.sort(key=score_audit, reverse=True)
 
         final_memories = []
         for ev in audit_events[:req.top_k]:
@@ -257,13 +310,13 @@ async def recall_endpoint(
                 entity_key=ev.get("entity_key"),
                 category=ev["category"],
                 metadata=ev_meta,
-                confidence=1.0,
+                confidence=float(ev.get("confidence", 1.0)),
                 vector_score=1.0,
                 bm25_score=1.0,
                 hybrid_score=1.0,
                 decayed_score=1.0,
                 created_at=c_at,
-                version=1
+                version=int(ev.get("version", 1))
             ))
         latency = (time.perf_counter() - t0) * 1000
         return RecallResponse(
@@ -281,14 +334,14 @@ async def recall_endpoint(
         top_k=settings.DENSE_SEARCH_TOP_K,
         source_agent=req.source_agent,
         category=req.category,
-        workspace_id=req.workspace_id,
+        workspace_id=effective_ws,
         current_epoch=now_epoch
     )
 
     bm25_results = await svc.sqlite_store.search_bm25(
         query=req.query,
         top_k=settings.BM25_SEARCH_TOP_K,
-        workspace_id=req.workspace_id
+        workspace_id=effective_ws
     )
 
     ranked = svc.scorer.fuse_and_rank(

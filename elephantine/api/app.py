@@ -10,8 +10,9 @@ from elephantine.api.routes.memory import get_container
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Start proactive background evaluator daemon
+    # Startup: Replay pending transactional outbox events to LanceDB and start background engine
     container = get_container()
+    await container.replay_pending_outbox()
     await container.proactive_engine.start()
     yield
     # Shutdown: Stop proactive background evaluator daemon

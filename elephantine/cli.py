@@ -296,6 +296,7 @@ def main():
     im_parser.add_argument("file", help="Path to Memanto export JSON file")
     im_parser.add_argument("--workspace", default=None, help="Target workspace ID (auto-detected if omitted)")
     im_parser.add_argument("--base-url", default=f"http://{settings.HOST}:{settings.PORT}", help="Elephantine server URL")
+    im_parser.add_argument("--exact", action="store_true", default=True, help="Preserve content and categories verbatim without normalization")
 
     args = parser.parse_args()
 
@@ -386,6 +387,8 @@ def main():
             # Safe shallow copy of non-metadata fields to prevent circular dict reference
             raw_copy = {k: v for k, v in it.items() if k != "metadata"}
             meta["_memanto_raw"] = raw_copy
+            if getattr(args, "exact", True):
+                meta["_exact"] = True
 
             orig_id = it.get("id") or it.get("memory_id")
             orig_ts = it.get("created_at") or it.get("timestamp")

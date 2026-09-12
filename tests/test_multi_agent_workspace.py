@@ -348,3 +348,120 @@ async def test_recall_as_of_and_changed_since_end_to_end():
     assert "CREATED" in event_types
     assert "SUPERSEDED" in event_types
 
+
+@pytest.mark.asyncio
+async def test_outbox_replay_worker():
+    """Verify pending outbox records are replayed and marked processed."""
+    import aiosqlite
+    import uuid
+    from datetime import datetime, timezone
+    from elephantine.api.routes.memory import get_container
+
+    svc = get_container()
+    uid = uuid.uuid4().hex[:8]
+    mem_id = f"mem-outbox-{uid}"
+    ws = f"ws-outbox-{uid}"
+
+    # Insert a memory directly into sqlite with a pending outbox entry (simulating crash before LanceDB write)
+    now = datetime.now(timezone.utc)
+    await svc.sqlite_store.insert_memory(
+        memory_id=mem_id,
+        content="Test outbox pending content.",
+        source_agent="recovery-bot",
+        entity_key=f"key-{uid}",
+        category="fact",
+        confidence=0.95,
+        metadata={},
+        created_at=now,
+        workspace_id=ws
+    )
+
+    # Verify outbox has a pending entry for this memory
+    pending = await svc.sqlite_store.get_pending_outbox()
+    assert any(p["memory_id"] == mem_id for p in pending)
+
+    # Trigger outbox replay
+    replayed = await svc.replay_pending_outbox()
+    assert replayed >= 1
+
+    # Verify outbox entry is now marked processed
+    remaining = await svc.sqlite_store.get_pending_outbox()
+    assert not any(p["memory_id"] == mem_id for p in remaining)
+
+
+@pytest.mark.asyncio
+async def test_changed_since_query_filtering():
+    """Verify changed_since filters events matching the query parameter."""
+    import uuid
+    from datetime import datetime, timezone
+    from elephantine.api.routes.memory import remember_endpoint, recall_endpoint, get_container
+    from elephantine.api.schemas import RememberRequest, RecallRequest
+
+    svc = get_container()
+    uid = uuid.uuid4().hex[:8]
+    ws = f"filter-ws-{uid}"
+    t_start = datetime.now(timezone.utc)
+
+    # Add memory A about Database
+    await remember_endpoint(RememberRequest(
+        content="PostgreSQL chosen as primary operational relational database.",
+        category="decision",
+        workspace_id=ws
+    ), svc)
+
+    # Add memory B about UI Framework
+    await remember_endpoint(RememberRequest(
+        content="React 19 chosen as frontend framework.",
+        category="decision",
+        workspace_id=ws
+    ), svc)
+
+    # Recall changed_since with query "PostgreSQL": only Memory A must match
+    res = await recall_endpoint(RecallRequest(
+        query="PostgreSQL",
+        workspace_id=ws,
+        changed_since=t_start
+    ), svc)
+    assert len(res.memories) == 1
+    assert "PostgreSQL" in res.memories[0].content
+
+
+@pytest.mark.asyncio
+async def test_enterprise_tenant_namespace_isolation():
+    """Verify enterprise tenant_id provides isolated storage partition even in same workspace name."""
+    from elephantine.core.auth_interface import TenantContext
+    from elephantine.api.routes.memory import remember_endpoint, recall_endpoint, get_container
+    from elephantine.api.schemas import RememberRequest, RecallRequest
+
+    svc = get_container()
+    ws = "shared-workspace"
+
+    tenant_a = TenantContext(
+        tenant_id="tenant-alpha",
+        roles=["admin"],
+        is_enterprise=True,
+        allowed_workspaces=["*"]
+    )
+    tenant_b = TenantContext(
+        tenant_id="tenant-beta",
+        roles=["admin"],
+        is_enterprise=True,
+        allowed_workspaces=["*"]
+    )
+
+    # Tenant Alpha writes secret
+    await remember_endpoint(RememberRequest(
+        content="Alpha confidential project code: ZEUS-99.",
+        workspace_id=ws
+    ), svc, _auth=tenant_a)
+
+    # Tenant Beta recalls from the same workspace name "shared-workspace"
+    res_b = await recall_endpoint(RecallRequest(
+        query="confidential code ZEUS",
+        workspace_id=ws
+    ), svc, _auth=tenant_b)
+
+    # Tenant Beta must NOT see Tenant Alpha's memory
+    assert not any("ZEUS-99" in m.content for m in res_b.memories)
+
+

@@ -134,12 +134,22 @@ class SqliteMetadataStore:
                     entity_key TEXT,
                     metadata_json TEXT NOT NULL DEFAULT '{}',
                     timestamp TIMESTAMP NOT NULL,
-                    superseded_by TEXT
+                    superseded_by TEXT,
+                    confidence REAL NOT NULL DEFAULT 1.0,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    expires_at TIMESTAMP
                 );
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_mem ON memory_events(memory_id, timestamp);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_ws_time ON memory_events(workspace_id, timestamp);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON memory_events(event_type, timestamp);")
+
+            # Safe migrations for existing tables
+            for col_def in [("confidence", "REAL NOT NULL DEFAULT 1.0"), ("version", "INTEGER NOT NULL DEFAULT 1"), ("expires_at", "TIMESTAMP")]:
+                try:
+                    conn.execute(f"ALTER TABLE memory_events ADD COLUMN {col_def[0]} {col_def[1]};")
+                except sqlite3.OperationalError:
+                    pass
 
             # Immutable ledger engine enforcement: prevent any UPDATE or DELETE on memory_events
             conn.execute("""
@@ -161,7 +171,8 @@ class SqliteMetadataStore:
             conn.execute("""
                 INSERT INTO memory_events (
                     event_id, memory_id, event_type, workspace_id, source_agent,
-                    role_authority, content, category, entity_key, metadata_json, timestamp, superseded_by
+                    role_authority, content, category, entity_key, metadata_json, timestamp, superseded_by,
+                    confidence, version, expires_at
                 )
                 SELECT
                     'backfill-' || m.id,
@@ -175,7 +186,10 @@ class SqliteMetadataStore:
                     m.entity_key,
                     m.metadata_json,
                     m.created_at,
-                    m.deprecated_by
+                    m.deprecated_by,
+                    m.confidence,
+                    m.version,
+                    m.expires_at
                 FROM memories m
                 WHERE NOT EXISTS (SELECT 1 FROM memory_events LIMIT 1);
             """)
@@ -238,8 +252,9 @@ class SqliteMetadataStore:
             await db.execute("""
                 INSERT INTO memory_events (
                     event_id, memory_id, event_type, workspace_id, source_agent,
-                    role_authority, content, category, entity_key, metadata_json, timestamp
-                ) VALUES (?, ?, 'CREATED', ?, ?, ?, ?, ?, ?, ?, ?)
+                    role_authority, content, category, entity_key, metadata_json, timestamp,
+                    confidence, version, expires_at
+                ) VALUES (?, ?, 'CREATED', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
             """, (
                 event_id,
                 memory_id,
@@ -250,7 +265,9 @@ class SqliteMetadataStore:
                 category,
                 entity_key,
                 meta_json,
-                created_at.isoformat()
+                created_at.isoformat(),
+                confidence,
+                expires_at.isoformat() if expires_at else None
             ))
             # 3. Transactional Outbox for LanceDB Sync
             outbox_id = str(uuid.uuid4())
@@ -305,8 +322,8 @@ class SqliteMetadataStore:
                     INSERT INTO memory_events (
                         event_id, memory_id, event_type, workspace_id, source_agent,
                         role_authority, content, category, entity_key, metadata_json,
-                        timestamp, superseded_by
-                    ) VALUES (?, ?, 'SUPERSEDED', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        timestamp, superseded_by, confidence, version, expires_at
+                    ) VALUES (?, ?, 'SUPERSEDED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     event_id,
                     memory_id,
@@ -318,7 +335,10 @@ class SqliteMetadataStore:
                     mem["entity_key"],
                     mem["metadata_json"],
                     now,
-                    new_memory_id
+                    new_memory_id,
+                    mem["confidence"],
+                    mem["version"],
+                    mem["expires_at"]
                 ))
                 # Stage delete in LanceDB outbox
                 await db.execute("""
@@ -350,8 +370,8 @@ class SqliteMetadataStore:
                 INSERT INTO memory_events (
                     event_id, memory_id, event_type, workspace_id, source_agent,
                     role_authority, content, category, entity_key, metadata_json,
-                    timestamp
-                ) VALUES (?, ?, 'DEACTIVATED', ?, ?, ?, ?, ?, ?, ?, ?)
+                    timestamp, confidence, version, expires_at
+                ) VALUES (?, ?, 'DEACTIVATED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 event_id,
                 memory_id,
@@ -362,7 +382,10 @@ class SqliteMetadataStore:
                 mem["category"],
                 mem["entity_key"],
                 mem["metadata_json"],
-                now
+                now,
+                mem["confidence"],
+                mem["version"],
+                mem["expires_at"]
             ))
             # Stage delete in LanceDB outbox
             await db.execute("""
@@ -372,6 +395,45 @@ class SqliteMetadataStore:
             """, (outbox_id, memory_id, now))
             await db.commit()
             return cursor.rowcount > 0
+
+    async def record_expired_events(self, workspace_id: Optional[str] = None) -> int:
+        """Finds active memories that have passed expires_at and logs EXPIRED events in ledger."""
+        import uuid
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            query = """
+                SELECT m.* FROM memories m
+                WHERE m.is_active = 1
+                  AND m.expires_at IS NOT NULL
+                  AND m.expires_at <= ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM memory_events e
+                      WHERE e.memory_id = m.id AND e.event_type = 'EXPIRED'
+                  )
+            """
+            params = [now_iso]
+            if workspace_id:
+                query += " AND m.workspace_id = ?"
+                params.append(workspace_id)
+            cursor = await db.execute(query, tuple(params))
+            expired_rows = await cursor.fetchall()
+            for r in expired_rows:
+                ev_id = str(uuid.uuid4())
+                await db.execute("""
+                    INSERT INTO memory_events (
+                        event_id, memory_id, event_type, workspace_id, source_agent,
+                        role_authority, content, category, entity_key, metadata_json,
+                        timestamp, confidence, version, expires_at
+                    ) VALUES (?, ?, 'EXPIRED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    ev_id, r["id"], r["workspace_id"], r["source_agent"],
+                    r["role_authority"], r["content"], r["category"], r["entity_key"],
+                    r["metadata_json"], now_iso, r["confidence"], r["version"], r["expires_at"]
+                ))
+            if expired_rows:
+                await db.commit()
+            return len(expired_rows)
 
     async def get_memories_as_of(
         self,
@@ -384,19 +446,20 @@ class SqliteMetadataStore:
         """
         async with aiosqlite.connect(str(self.db_path)) as db:
             db.row_factory = aiosqlite.Row
-            # All creations up to as_of that were not superseded/deactivated before as_of
+            # All creations up to as_of that were not superseded/deactivated/expired before as_of
             query = """
                 SELECT e.* FROM memory_events e
                 WHERE e.event_type = 'CREATED'
                   AND e.timestamp <= ?
+                  AND (e.expires_at IS NULL OR e.expires_at > ?)
                   AND NOT EXISTS (
                       SELECT 1 FROM memory_events d
                       WHERE d.memory_id = e.memory_id
-                        AND d.event_type IN ('SUPERSEDED', 'DEACTIVATED')
+                        AND d.event_type IN ('SUPERSEDED', 'DEACTIVATED', 'EXPIRED')
                         AND d.timestamp <= ?
                   )
             """
-            params = [as_of_timestamp, as_of_timestamp]
+            params = [as_of_timestamp, as_of_timestamp, as_of_timestamp]
             if workspace_id:
                 query += " AND e.workspace_id = ?"
                 params.append(workspace_id)
@@ -700,7 +763,8 @@ class SqliteMetadataStore:
 
                 event_params.append((
                     str(uuid.uuid4()), mem_id, 'CREATED', ws_id, source_agent,
-                    authority, content, category, entity_key, meta_json, created_at_str
+                    authority, content, category, entity_key, meta_json, created_at_str,
+                    confidence, 1, expires_at_str
                 ))
 
                 outbox_payload = json.dumps({
@@ -726,8 +790,9 @@ class SqliteMetadataStore:
             await db.executemany("""
                 INSERT INTO memory_events (
                     event_id, memory_id, event_type, workspace_id, source_agent,
-                    role_authority, content, category, entity_key, metadata_json, timestamp
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    role_authority, content, category, entity_key, metadata_json, timestamp,
+                    confidence, version, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, event_params)
 
             await db.executemany("""
