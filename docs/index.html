@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elephantine — Zero-GPU, Local-First Memory Engine for AI Agents</title>
+  <meta name="description" content="Persistent, verifiable shared memory for multi-agent systems. Embedded LanceDB, SQLite WAL, ONNX AVX-512 embeddings, and native MCP protocol support.">
+  <meta property="og:title" content="Elephantine — Memory Engine for AI Agents">
+  <meta property="og:description" content="Zero-GPU, local-first memory engine with Role-Authority Consensus and Native MCP.">
+  <meta property="og:image" content="assets/elephantine_banner.png">
+  <link rel="icon" type="image/png" href="assets/elephantine_logo.png">
+
+  <!-- Tailwind CSS CDN & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              accent: '#38bdf8',
+              purple: '#a855f7',
+              gold: '#f59e0b'
+            },
+            dark: {
+              bg: '#090d16',
+              card: '#111827',
+              border: '#1f293d',
+              surface: '#0d1322'
+            }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Courier New', 'monospace'],
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+    .glow-bg {
+      background: radial-gradient(circle at 50% 20%, rgba(16, 185, 129, 0.15), rgba(56, 189, 248, 0.05) 50%, transparent 80%);
+    }
+    .glass-card {
+      background: rgba(17, 24, 39, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card:hover {
+      border-color: rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.15);
+    }
+    .terminal-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 18px;
+      background: #10b981;
+      vertical-align: middle;
+      animation: blink 1s step-start infinite;
+    }
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+    .badge-glama {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(56, 189, 248, 0.15));
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+  </style>
+</head>
+<body class="bg-dark-bg text-slate-200 font-sans antialiased selection:bg-brand-500 selection:text-white min-h-screen relative overflow-x-hidden">
+
+  <!-- Background decorative glows -->
+  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] glow-bg pointer-events-none -z-10"></div>
+  <div class="absolute top-[800px] right-0 w-96 h-96 bg-brand-purple/10 rounded-full blur-3xl pointer-events-none -z-10"></div>
+
+  <!-- Navigation -->
+  <header class="sticky top-0 z-50 backdrop-blur-md bg-dark-bg/80 border-b border-dark-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <img src="assets/elephantine_logo.png" alt="Elephantine Logo" class="w-10 h-10 rounded-xl shadow-lg border border-brand-500/30">
+        <span class="font-extrabold text-xl tracking-tight text-white flex items-center gap-2">
+          Elephantine
+          <span class="text-xs bg-brand-500/10 text-brand-400 border border-brand-500/30 px-2 py-0.5 rounded-full font-mono font-medium">v0.3.5</span>
+        </span>
+      </div>
+
+      <nav class="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-300">
+        <a href="#features" class="hover:text-brand-400 transition-colors">Features</a>
+        <a href="#architecture" class="hover:text-brand-400 transition-colors">Architecture</a>
+        <a href="#mcp" class="hover:text-brand-400 transition-colors">MCP Protocol</a>
+        <a href="#pricing" class="hover:text-brand-400 transition-colors">Pricing</a>
+        <a href="https://pypi.org/project/elephantine/" target="_blank" class="hover:text-brand-400 transition-colors">PyPI</a>
+      </nav>
+
+      <div class="flex items-center space-x-3">
+        <a href="https://github.com/partitect/elephantine" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-card border border-dark-border hover:border-slate-500 hover:text-white text-sm font-medium transition-all shadow-sm">
+          <i data-lucide="github" class="w-4 h-4"></i>
+          <span>Star on GitHub</span>
+          <span class="bg-dark-surface px-1.5 py-0.5 rounded text-xs text-brand-400 border border-slate-700 font-mono">★</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="relative pt-12 pb-20 md:pt-20 md:pb-32">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      
+      <!-- Top Badges -->
+      <div class="inline-flex items-center gap-3 p-1.5 pr-4 rounded-full bg-dark-card/90 border border-dark-border mb-8 shadow-inner">
+        <span class="px-3 py-1 rounded-full bg-brand-500/20 text-brand-400 text-xs font-semibold uppercase tracking-wider">NEW</span>
+        <span class="text-xs text-slate-300">PyPI v0.3.5 is Live with Glama MCP Registry Certification!</span>
+        <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-400"></i>
+      </div>
+
+      <!-- Hero Title -->
+      <h1 class="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-white tracking-tight leading-[1.15] max-w-5xl mx-auto">
+        Zero-GPU, Local-First <br class="hidden sm:inline">
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-brand-400 via-brand-accent to-brand-purple">
+          Memory Engine for AI Agents
+        </span>
+      </h1>
+
+      <!-- Subtitle -->
+      <p class="mt-6 text-lg sm:text-xl text-slate-400 max-w-3xl mx-auto font-normal leading-relaxed">
+        Persistent, verifiable shared memory for multi-agent systems. Embedded LanceDB vector store, SQLite WAL, ONNX AVX-512 CPU embeddings, and native Model Context Protocol (MCP) server.
+      </p>
+
+      <!-- Quick Install Box -->
+      <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-xl mx-auto">
+        <div class="w-full flex items-center justify-between px-4 py-3 bg-dark-surface border border-brand-500/30 rounded-xl font-mono text-sm text-slate-200 shadow-xl relative group">
+          <div class="flex items-center gap-2 truncate">
+            <span class="text-brand-500 select-none">$</span>
+            <span id="installCmd" class="truncate font-semibold text-emerald-300">pip install elephantine</span>
+          </div>
+          <button onclick="copyInstallCmd()" id="copyBtn" class="ml-3 p-1.5 rounded-lg bg-dark-card hover:bg-brand-500/20 text-slate-400 hover:text-brand-400 border border-slate-700 transition-all flex items-center gap-1 text-xs">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span id="copyText">Copy</span>
+          </button>
+        </div>
+
+        <a href="#demo" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-brand-500 to-emerald-600 hover:from-brand-600 hover:to-emerald-700 text-white font-semibold text-sm shadow-lg shadow-brand-500/25 transition-all">
+          <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+          <span>See Live Demo</span>
+        </a>
+      </div>
+
+      <!-- Feature Pills -->
+      <div class="mt-12 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400 font-mono">
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-brand-400"></i>
+          <span>No Cloud Lock-in</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-brand-400"></i>
+          <span>Zero GPU Requirement (CPU AVX-512)</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-brand-400"></i>
+          <span>Role-Authority Consensus</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-brand-400"></i>
+          <span>Native MCP Protocol</span>
+        </div>
+      </div>
+
+      <!-- Pixel Art Banner Artwork Showcase -->
+      <div class="mt-14 relative max-w-5xl mx-auto rounded-2xl overflow-hidden border border-brand-500/30 shadow-2xl bg-dark-surface">
+        <div class="absolute inset-0 bg-gradient-to-t from-dark-bg via-transparent to-transparent pointer-events-none z-10"></div>
+        <img src="assets/elephantine_banner.png" alt="Elephantine Cyber Elephant Mascot & Pixel Art City" class="w-full h-auto object-cover transform hover:scale-[1.01] transition-transform duration-500">
+        <div class="absolute bottom-4 left-6 z-20 flex items-center gap-3">
+          <span class="px-3 py-1 rounded-md bg-black/70 backdrop-blur border border-brand-500/40 text-xs font-mono text-brand-400 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-brand-400 animate-ping"></span>
+            AGENT MEMORY SUBSYSTEM READY
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Interactive Terminal Simulation Demo -->
+  <section id="demo" class="py-20 bg-dark-surface/50 border-y border-dark-border relative">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <h2 class="text-3xl font-extrabold text-white tracking-tight">How Multiple Agents Think Together</h2>
+        <p class="mt-3 text-slate-400">Watch the Orchestrator, Researcher, and Developer agents read, write, and resolve facts without memory drift.</p>
+      </div>
+
+      <!-- Terminal Window -->
+      <div class="rounded-2xl border border-slate-700/80 bg-black/90 shadow-2xl overflow-hidden font-mono text-xs sm:text-sm">
+        <!-- Terminal Header -->
+        <div class="px-4 py-3 bg-dark-card border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+            <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+            <div class="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+            <span class="ml-2 text-xs text-slate-400 font-sans">elephantine-daemon — fastmcp session</span>
+          </div>
+          <div class="text-xs text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">
+            HTTP 127.0.0.1:8765
+          </div>
+        </div>
+
+        <!-- Terminal Body -->
+        <div class="p-6 space-y-4 min-h-[340px] text-slate-300">
+          <div class="text-slate-500">// 1. Starting multi-agent memory session with role-based authority...</div>
+          
+          <div class="flex items-start gap-3">
+            <span class="text-brand-purple font-bold">[ORCHESTRATOR]</span>
+            <div>
+              <p class="text-slate-200">Writing project architectural mandate...</p>
+              <p class="text-emerald-400 mt-1">✓ remember_fact(scope="architecture", key="database", value="PostgreSQL 16 with pgvector", authority=5)</p>
+              <p class="text-slate-500 text-xs">Vectorized via all-MiniLM-L6-v2 (AVX-512 ONNX) → Latency: 2.1ms</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-3">
+            <span class="text-brand-accent font-bold">[RESEARCHER]</span>
+            <div>
+              <p class="text-slate-200">Querying shared memory for database stack before benchmarking...</p>
+              <p class="text-sky-300 mt-1">➜ recall_context(query="what database are we using?")</p>
+              <p class="text-slate-400 text-xs">Retrieved: "PostgreSQL 16 with pgvector" (Confidence: 0.96, Authority: 5)</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-3">
+            <span class="text-amber-400 font-bold">[DEVELOPER]</span>
+            <div>
+              <p class="text-slate-200">Attempting to overwrite with lower authority (authority=2)...</p>
+              <p class="text-amber-300 mt-1">⚡ Conflict Detected: Authority 2 cannot overwrite Authority 5 without consensus.</p>
+              <p class="text-brand-400 text-xs">✓ Role-Authority Consensus Engine prevented hallucinations and drift.</p>
+            </div>
+          </div>
+
+          <div class="pt-2 flex items-center gap-2 text-brand-400">
+            <span>agent@elephantine:~$</span>
+            <span id="typingEffect">recall_context --query "agent deployment status"</span>
+            <span class="terminal-cursor"></span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Features Grid -->
+  <section id="features" class="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center max-w-3xl mx-auto mb-16">
+      <span class="text-brand-400 font-mono text-sm font-semibold uppercase tracking-wider">Engine Capabilities</span>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-2">Engineered for Sovereign, High-Speed Agents</h2>
+      <p class="mt-4 text-slate-400">Everything needed for agents that run continuously without forgetting, drifting, or leaking private data.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      
+      <!-- Card 1 -->
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400 mb-6">
+          <i data-lucide="cpu" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Zero-GPU ONNX Embeddings</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Powered by quantized ONNX models running natively on CPU using AVX-512 instructions. No CUDA drivers, no GPU cloud bills, instant sub-5ms vector generation.
+        </p>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-brand-accent/10 border border-brand-accent/30 flex items-center justify-center text-brand-accent mb-6">
+          <i data-lucide="database" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Embedded LanceDB & SQLite WAL</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Zero external dependencies. LanceDB provides columnar, disk-backed vector search while SQLite WAL guarantees ACID compliance for audit trails and agent states.
+        </p>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-brand-purple/10 border border-brand-purple/30 flex items-center justify-center text-brand-purple mb-6">
+          <i data-lucide="shield-check" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Role-Authority Consensus</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Stops agent drift and contradictory memory. Assign hierarchical authority levels (e.g. Lead > Worker) so lower-ranked subagents cannot hallucinate over verified facts.
+        </p>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-brand-gold/10 border border-brand-gold/30 flex items-center justify-center text-brand-gold mb-6">
+          <i data-lucide="blocks" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Native Model Context Protocol</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Plug-and-play MCP server for Cursor, Claude Desktop, Antigravity, and any MCP-compliant client. FastMCP standard with zero configuration.
+        </p>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-6">
+          <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Live WebUI Memory Inspector</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Built-in dashboard at <code class="text-brand-400 font-mono text-xs">/dashboard</code> to inspect semantic vector spaces, visualize memory graphs, verify scopes, and edit facts in real time.
+        </p>
+      </div>
+
+      <!-- Card 6 -->
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-6">
+          <i data-lucide="lock" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2">Total Data Sovereignty</h3>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Your agents' secrets, customer conversations, and internal proprietary workflows never leave your local machines or private enterprise VPC.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Architecture Section -->
+  <section id="architecture" class="py-20 bg-dark-surface/40 border-t border-dark-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <span class="text-brand-accent font-mono text-sm font-semibold uppercase tracking-wider">System Architecture</span>
+        <h2 class="text-3xl font-extrabold text-white tracking-tight mt-2">How Elephantine Works Under The Hood</h2>
+        <p class="mt-4 text-slate-400">A clean separation between client protocols, consensus resolution, and storage backends.</p>
+      </div>
+
+      <div class="max-w-4xl mx-auto rounded-2xl border border-dark-border bg-dark-card/60 p-4 sm:p-8 shadow-2xl">
+        <img src="assets/architecture.png" alt="Elephantine Architecture Diagram" class="w-full h-auto rounded-xl border border-slate-800">
+      </div>
+    </div>
+  </section>
+
+  <!-- MCP Protocol & IDE Integration -->
+  <section id="mcp" class="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full badge-glama text-xs font-mono text-purple-300 mb-4">
+          <i data-lucide="award" class="w-3.5 h-3.5"></i>
+          <span>Official Glama & Awesome MCP Registry Certified</span>
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+          Works Out-of-the-Box with Cursor, Claude, & Antigravity
+        </h2>
+        <p class="mt-4 text-slate-400 leading-relaxed">
+          Elephantine speaks the universal Model Context Protocol. Once installed, your IDE or LLM agent instantly acquires three high-level cognitive memory primitives:
+        </p>
+
+        <div class="mt-6 space-y-4 font-mono text-xs">
+          <div class="p-3.5 rounded-xl bg-dark-surface border border-slate-800">
+            <span class="text-brand-400 font-bold">remember_fact</span>
+            <span class="text-slate-400">(scope, key, value, authority, confidence)</span>
+            <p class="text-slate-500 font-sans text-xs mt-1">Stores verified knowledge into LanceDB and writes to SQLite audit log.</p>
+          </div>
+          <div class="p-3.5 rounded-xl bg-dark-surface border border-slate-800">
+            <span class="text-brand-accent font-bold">recall_context</span>
+            <span class="text-slate-400">(query, scope, top_k, min_confidence)</span>
+            <p class="text-slate-500 font-sans text-xs mt-1">Cosine similarity semantic search using local AVX-512 embeddings.</p>
+          </div>
+          <div class="p-3.5 rounded-xl bg-dark-surface border border-slate-800">
+            <span class="text-brand-purple font-bold">get_procedural_workflow</span>
+            <span class="text-slate-400">(workflow_id)</span>
+            <p class="text-slate-500 font-sans text-xs mt-1">Retrieves deterministic multi-step recipes executed by specialized agents.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config Snippet -->
+      <div class="rounded-2xl border border-slate-700/80 bg-black/95 shadow-2xl p-6 font-mono text-xs overflow-x-auto">
+        <div class="text-slate-400 mb-3 flex items-center justify-between">
+          <span>// claude_desktop_config.json</span>
+          <span class="text-emerald-400">MCP JSON-RPC</span>
+        </div>
+        <pre class="text-slate-300"><code>{
+  <span class="text-brand-purple">"mcpServers"</span>: {
+    <span class="text-brand-accent">"elephantine"</span>: {
+      <span class="text-brand-400">"command"</span>: <span class="text-emerald-300">"uvx"</span>,
+      <span class="text-brand-400">"args"</span>: [
+        <span class="text-emerald-300">"--from"</span>,
+        <span class="text-emerald-300">"elephantine[mcp]"</span>,
+        <span class="text-emerald-300">"elephantine-mcp"</span>
+      ]
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing & Commercial Tiers -->
+  <section id="pricing" class="py-24 bg-dark-surface/40 border-t border-dark-border">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <span class="text-brand-500 font-mono text-sm font-semibold uppercase tracking-wider">Transparent & Flexible</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mt-2">Deploy Open-Source or Scale Enterprise</h2>
+        <p class="mt-4 text-slate-400">Start 100% free locally. Expand to managed sync and air-gapped enterprise deployments when needed.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        
+        <!-- Community Tier -->
+        <div class="glass-card rounded-2xl p-8 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between">
+              <h3 class="text-xl font-bold text-white">Community</h3>
+              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full font-mono">MIT License</span>
+            </div>
+            <p class="text-slate-400 text-xs mt-2">For individual developers, hobbyists, and local multi-agent experiments.</p>
+            <div class="mt-6">
+              <span class="text-4xl font-extrabold text-white">$0</span>
+              <span class="text-slate-400 text-sm"> / forever</span>
+            </div>
+
+            <ul class="mt-8 space-y-3.5 text-xs text-slate-300">
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Full Open-Source Core (LanceDB + SQLite)</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Zero-GPU ONNX AVX-512 Embeddings</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Native FastMCP Server (Cursor / Claude)</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>WebUI Memory Inspector</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Community GitHub Discussions</span>
+              </li>
+            </ul>
+          </div>
+
+          <a href="https://github.com/partitect/elephantine" target="_blank" class="mt-8 w-full py-3 rounded-xl bg-dark-card border border-slate-700 hover:border-slate-500 text-center text-white font-semibold text-xs transition-all">
+            Get Started on GitHub
+          </a>
+        </div>
+
+        <!-- Managed Cloud (Featured) -->
+        <div class="glass-card rounded-2xl p-8 flex flex-col justify-between border-brand-500/60 shadow-2xl relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-brand-500 text-dark-bg text-[10px] font-extrabold uppercase tracking-widest">
+            MOST POPULAR
+          </div>
+          <div>
+            <div class="flex items-center justify-between">
+              <h3 class="text-xl font-bold text-white">Managed Cloud</h3>
+              <span class="text-xs bg-brand-500/20 text-brand-400 px-2.5 py-1 rounded-full font-mono">Early Access</span>
+            </div>
+            <p class="text-slate-400 text-xs mt-2">Shared team memory across developer machines with zero server management.</p>
+            <div class="mt-6">
+              <span class="text-4xl font-extrabold text-white">$29</span>
+              <span class="text-slate-400 text-sm"> / dev / month</span>
+            </div>
+
+            <ul class="mt-8 space-y-3.5 text-xs text-slate-300">
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Everything in Community</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Encrypted Multi-Device Sync</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Team Scopes & Role Permission RBAC</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Automated Daily Cloud Backups</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>Webhooks & CI/CD Integrations</span>
+              </li>
+            </ul>
+          </div>
+
+          <a href="#waitlist" class="mt-8 w-full py-3 rounded-xl bg-gradient-to-r from-brand-500 to-emerald-600 hover:from-brand-600 hover:to-emerald-700 text-center text-white font-semibold text-xs shadow-lg shadow-brand-500/20 transition-all">
+            Join Cloud Waitlist
+          </a>
+        </div>
+
+        <!-- Enterprise Tier -->
+        <div class="glass-card rounded-2xl p-8 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between">
+              <h3 class="text-xl font-bold text-white">Enterprise</h3>
+              <span class="text-xs bg-purple-500/20 text-purple-300 px-2.5 py-1 rounded-full font-mono">Air-Gapped</span>
+            </div>
+            <p class="text-slate-400 text-xs mt-2">For organizations requiring on-premise compliance, custom SLAs, and air-gapped VPCs.</p>
+            <div class="mt-6">
+              <span class="text-3xl font-extrabold text-white">Custom</span>
+              <span class="text-slate-400 text-sm"> / contact us</span>
+            </div>
+
+            <ul class="mt-8 space-y-3.5 text-xs text-slate-300">
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-purple"></i>
+                <span>Dedicated VPC & Air-Gapped Deployment</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-purple"></i>
+                <span>SSO, SAML & Okta Integration</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-purple"></i>
+                <span>SOC2 & HIPAA Ready Architecture</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-purple"></i>
+                <span>Custom Domain & Dedicated SLA</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-brand-purple"></i>
+                <span>Direct Slack/Teams Support Channel</span>
+              </li>
+            </ul>
+          </div>
+
+          <a href="mailto:support@elephantine.dev?subject=Enterprise%20Inquiry%20Elephantine" class="mt-8 w-full py-3 rounded-xl bg-dark-card border border-purple-500/40 hover:border-purple-500 text-center text-purple-200 font-semibold text-xs transition-all">
+            Contact Enterprise Sales
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Cloud Waitlist & Newsletter Form -->
+  <section id="waitlist" class="py-20 relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="glass-card rounded-3xl p-8 sm:p-12 text-center border-brand-500/40 shadow-2xl relative overflow-hidden">
+      <div class="absolute -right-12 -top-12 w-48 h-48 bg-brand-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      
+      <i data-lucide="sparkles" class="w-8 h-8 text-brand-400 mx-auto mb-4"></i>
+      <h2 class="text-3xl font-extrabold text-white tracking-tight">Be The First on Elephantine Cloud</h2>
+      <p class="mt-3 text-slate-400 text-sm max-w-lg mx-auto">
+        We are rolling out early-bird invites to agent teams in batches. Sign up with your work email to skip the line and claim 3 months free.
+      </p>
+
+      <form class="mt-8 flex flex-col sm:flex-row gap-3 max-w-md mx-auto" onsubmit="event.preventDefault(); showWaitlistSuccess();">
+        <input type="email" id="waitlistEmail" required placeholder="you@company.com" class="w-full px-4 py-3 rounded-xl bg-dark-surface border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 text-sm">
+        <button type="submit" class="px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-sm whitespace-nowrap transition-all shadow-md shadow-brand-500/20">
+          Request Access
+        </button>
+      </form>
+      <p id="waitlistMsg" class="mt-3 text-xs text-brand-400 hidden font-mono">✓ Thank you! You're on the priority early-access queue.</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-12 border-t border-dark-border text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div class="flex items-center space-x-3">
+        <img src="assets/elephantine_logo.png" alt="Elephantine" class="w-6 h-6 rounded-lg opacity-80">
+        <span>© 2026 Elephantine Team. Released under the MIT License.</span>
+      </div>
+
+      <div class="flex items-center space-x-6 text-slate-400">
+        <a href="https://github.com/partitect/elephantine" target="_blank" class="hover:text-white transition-colors">GitHub</a>
+        <a href="https://pypi.org/project/elephantine/" target="_blank" class="hover:text-white transition-colors">PyPI</a>
+        <a href="https://glama.ai/mcp/servers" target="_blank" class="hover:text-white transition-colors">Glama Registry</a>
+        <a href="#features" class="hover:text-white transition-colors">Docs</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Copy Install Command
+    function copyInstallCmd() {
+      const text = document.getElementById('installCmd').innerText;
+      navigator.clipboard.writeText(text);
+      const copyText = document.getElementById('copyText');
+      copyText.innerText = 'Copied!';
+      setTimeout(() => {
+        copyText.innerText = 'Copy';
+      }, 2000);
+    }
+
+    // Waitlist Form Success
+    function showWaitlistSuccess() {
+      const email = document.getElementById('waitlistEmail').value;
+      if (email) {
+        document.getElementById('waitlistMsg').classList.remove('hidden');
+        document.getElementById('waitlistEmail').value = '';
+      }
+    }
+  </script>
+</body>
+</html>
