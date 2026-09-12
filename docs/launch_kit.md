@@ -48,9 +48,8 @@ So I built **Elephantine** (https://github.com/partitect/elephantine): an open-s
 ### Highlights:
 - **Zero-GPU Footprint**: Uses ONNX Runtime with AVX-512 SIMD thread pinning for all-MiniLM-L6-v2 embeddings. Only ~14ms per embedding on CPU.
 - **Embedded Storage**: LanceDB (C++/Arrow) for vectors + SQLite WAL for metadata and BM25 full-text search. No external servers to configure.
-- **Multi-Agent Workspace**: Shared memory pool (workspace_id) across agent swarms with Role Authority Consensus (
-ole_authority 0.0 - 1.0) so junior agents cannot overwrite lead architect guidelines.
-- **Native MCP**: Runs as a FastMCP stdio/SSE server for instant Cursor Composer and Claude Desktop integration.
+- **Multi-Agent Workspace**: Shared memory pool (workspace_id) across agent swarms with Role Authority Consensus (`role_authority` 0.0 - 1.0) so junior agents cannot overwrite lead architect guidelines.
+- **Native MCP**: Runs as a FastMCP stdio/SSE server for instant Cursor Composer, Google Antigravity, and Claude Desktop integration.
 - **WebUI Inspector**: Built-in dashboard at http://localhost:8765/dashboard to inspect memory ledgers, graph triplets, and deprecation history.
 
 Benchmarks on a basic 2 vCPU / 4 GB RAM VPS:
@@ -63,7 +62,7 @@ License: Apache 2.0
 Quickstart: pip install elephantine && elephantine start
 
 Feedback and PRs are super welcome!
-`
+```
 
 ### B. r/Cursor & r/ClaudeAI
 - **Title**: How to give Cursor Composer and Claude Desktop permanent persistent memory with zero API cost (MCP)
@@ -80,10 +79,10 @@ Feedback and PRs are super welcome!
 >
 > ⚡ Sub-35ms recall on 2 vCPU
 > 🔒 100% local (LanceDB + SQLite WAL)
-> 🔌 Native Cursor & Claude Desktop MCP
+> 🔌 Native Cursor, Antigravity & Claude Desktop MCP
 > 👥 Multi-agent team memory
 >
-> [Attach docs/assets/dashboard_mockup.svg]
+> [Attach docs/assets/elephantine_banner.png]
 > 🧵👇
 
 **Post 2:**
@@ -105,7 +104,7 @@ Feedback and PRs are super welcome!
 > 100% Open Source (Apache 2.0).
 >
 > 📦 pip install elephantine
-> 🚀 lephantine start
+> 🚀 elephantine start
 >
 > Star the repo on GitHub: https://github.com/partitect/elephantine
 
@@ -113,15 +112,15 @@ Feedback and PRs are super welcome!
 
 ## 4. Awesome Lists PR Submissions
 
-### Submit to wesome-mcp-servers:
+### Submit to awesome-mcp-servers:
 - **Repository**: https://github.com/punkpeye/awesome-mcp-servers or https://github.com/modelcontextprotocol/servers
 - **Section**: Memory / Storage or Agent Tools
 - **Entry**:
-`markdown
+```markdown
 - [Elephantine](https://github.com/partitect/elephantine) - Zero-GPU, local-first, CPU-native cognitive memory layer for AI agents with hybrid search and multi-agent shared workspaces.
-`
+```
 
-### Submit to wesome-ai-agents:
-`markdown
+### Submit to awesome-ai-agents:
+```markdown
 - [Elephantine](https://github.com/partitect/elephantine) - Local-first persistent memory engine for autonomous AI agents with role-authority consensus and sub-35ms CPU recall.
-`
+```
