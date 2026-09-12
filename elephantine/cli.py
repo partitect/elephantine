@@ -368,8 +368,8 @@ def main():
             if not content:
                 continue
             cat = it.get("category") or it.get("type", "fact")
-            # Lossless preservation: capture all Memanto fields into metadata
-            meta = it.get("metadata", {})
+            # Lossless preservation: capture all Memanto fields into metadata without circular reference
+            meta = dict(it.get("metadata") or {})
             if "title" in it:
                 meta["title"] = it["title"]
             if "provenance" in it:
@@ -382,16 +382,29 @@ def main():
                 meta["memanto_status"] = it["status"]
             if "created_at" in it or "timestamp" in it:
                 meta["original_timestamp"] = it.get("created_at") or it.get("timestamp")
-            meta["_memanto_raw"] = it  # 100% Lossless fallback
+            
+            # Safe shallow copy of non-metadata fields to prevent circular dict reference
+            raw_copy = {k: v for k, v in it.items() if k != "metadata"}
+            meta["_memanto_raw"] = raw_copy
+
+            orig_id = it.get("id") or it.get("memory_id")
+            orig_ts = it.get("created_at") or it.get("timestamp")
+            conf = float(it.get("confidence", 1.0))
+            auth = float(it.get("role_authority", it.get("authority", 0.5)))
+            agent = it.get("source_agent") or it.get("agent_id", "memanto_import")
+            key = it.get("entity_key") or it.get("key")
 
             c.remember(
                 content=content,
                 category=cat,
-                entity_key=it.get("entity_key") or it.get("key") or it.get("id"),
-                source_agent=it.get("source_agent") or it.get("agent_id", "memanto_import"),
+                entity_key=key,
+                source_agent=agent,
                 workspace_id=ws,
-                role_authority=float(it.get("role_authority", it.get("authority", 0.5))),
-                metadata=meta
+                role_authority=auth,
+                confidence=conf,
+                metadata=meta,
+                custom_id=orig_id,
+                created_at=orig_ts
             )
             count += 1
         print(f"✓ Successfully imported {count} memories from Memanto into Elephantine!")

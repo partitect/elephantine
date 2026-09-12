@@ -179,10 +179,12 @@ async def recall_changed_since(
     return [
         {
             "id": m.id,
+            "event_type": m.metadata.get("_event_type", "MUTATION"),
             "content": m.content,
             "workspace_id": m.workspace_id,
             "category": m.category,
-            "created_at": m.created_at.isoformat()
+            "superseded_by": m.metadata.get("_superseded_by"),
+            "timestamp": m.created_at.isoformat()
         }
         for m in res.memories
     ]

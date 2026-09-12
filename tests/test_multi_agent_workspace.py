@@ -233,3 +233,118 @@ async def test_server_side_authority_clamping():
     # Check database: stored role_authority must be clamped to 0.4!
     stored = await svc.sqlite_store.get_memory_by_id(res.id)
     assert stored["role_authority"] == 0.4
+
+
+@pytest.mark.asyncio
+async def test_memory_events_immutable_triggers():
+    """Verify SQLite triggers prevent any UPDATE or DELETE on memory_events."""
+    import aiosqlite
+    import pytest
+    from elephantine.api.routes.memory import get_container
+    svc = get_container()
+
+    async with aiosqlite.connect(str(svc.sqlite_store.db_path)) as db:
+        # Pick any existing event
+        cursor = await db.execute("SELECT event_id FROM memory_events LIMIT 1")
+        row = await cursor.fetchone()
+        if not row:
+            pytest.skip("No events in table yet")
+        ev_id = row[0]
+
+        # Attempt UPDATE on memory_events
+        with pytest.raises(Exception) as exc_update:
+            await db.execute("UPDATE memory_events SET content = 'tampered' WHERE event_id = ?", (ev_id,))
+        assert "immutable append-only" in str(exc_update.value).lower()
+
+        # Attempt DELETE on memory_events
+        with pytest.raises(Exception) as exc_delete:
+            await db.execute("DELETE FROM memory_events WHERE event_id = ?", (ev_id,))
+        assert "immutable append-only" in str(exc_delete.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_api_key_manager_context_mapping():
+    """Verify ApiKeyManager properly maps allowed_workspaces and max_role_authority from config."""
+    import json
+    from elephantine.enterprise.rbac import ApiKeyManager
+
+    cfg = {
+        "key-junior-1": {
+            "tenant_id": "tenant-corp",
+            "agent_id": "junior-agent",
+            "roles": ["editor"],
+            "allowed_workspaces": ["frontend", "docs"],
+            "max_role_authority": 0.45
+        }
+    }
+    mgr = ApiKeyManager(keys_json=json.dumps(cfg))
+    ctx = mgr.authenticate("key-junior-1")
+    assert ctx is not None
+    assert ctx.tenant_id == "tenant-corp"
+    assert ctx.max_role_authority == 0.45
+    assert set(ctx.allowed_workspaces) == {"frontend", "docs"}
+
+
+@pytest.mark.asyncio
+async def test_recall_as_of_and_changed_since_end_to_end():
+    """Verify /recall endpoint faithfully performs time-travel as_of and audit changed_since."""
+    import asyncio
+    import uuid
+    from datetime import datetime, timezone
+    from elephantine.api.routes.memory import remember_endpoint, recall_endpoint, get_container
+    from elephantine.api.schemas import RememberRequest, RecallRequest
+
+    svc = get_container()
+    uid = uuid.uuid4().hex[:8]
+    ws = f"audit-ws-{uid}"
+    key = f"feature:payment_gateway-{uid}"
+
+    t_start = datetime.now(timezone.utc)
+
+    # 1. Version 1: Stripe (created)
+    req1 = RememberRequest(
+        content="Primary payment gateway is Stripe v1.",
+        category="decision",
+        entity_key=key,
+        workspace_id=ws,
+        role_authority=0.8
+    )
+    res1 = await remember_endpoint(req1, svc)
+    v1_id = res1.id
+
+    await asyncio.sleep(0.05)
+    t_v1_checkpoint = datetime.now(timezone.utc)
+    await asyncio.sleep(0.05)
+
+    # 2. Version 2: Adyen (supersedes Stripe)
+    req2 = RememberRequest(
+        content="Primary payment gateway migrated to Adyen v2.",
+        category="decision",
+        entity_key=key,
+        workspace_id=ws,
+        role_authority=0.9
+    )
+    res2 = await remember_endpoint(req2, svc)
+    v2_id = res2.id
+
+    # Time-travel query as of t_v1_checkpoint: Must return Stripe v1 even though it is superseded today!
+    rec_past = await recall_endpoint(RecallRequest(
+        query="payment gateway",
+        workspace_id=ws,
+        as_of=t_v1_checkpoint
+    ), svc)
+    assert len(rec_past.memories) >= 1
+    assert any("Stripe" in m.content for m in rec_past.memories)
+    assert not any("Adyen" in m.content for m in rec_past.memories)
+
+    # Audit query changed_since t_start: Must return both CREATED and SUPERSEDED events!
+    rec_audit = await recall_endpoint(RecallRequest(
+        query="payment",
+        workspace_id=ws,
+        changed_since=t_start
+    ), svc)
+    assert len(rec_audit.memories) >= 2
+    event_types = [m.metadata.get("_event_type") for m in rec_audit.memories]
+    assert "CREATED" in event_types
+    assert "SUPERSEDED" in event_types
+

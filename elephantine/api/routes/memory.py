@@ -78,8 +78,9 @@ async def remember_endpoint(
     """
     # Server-side authority & workspace verification:
     # Caller cannot claim higher authority than permitted by its security context
-    effective_authority = min(req.role_authority, _auth.max_role_authority)
-    if "*" not in _auth.allowed_workspaces and req.workspace_id not in _auth.allowed_workspaces:
+    auth_ctx = _auth if isinstance(_auth, TenantContext) else TenantContext()
+    effective_authority = min(req.role_authority, auth_ctx.max_role_authority)
+    if "*" not in auth_ctx.allowed_workspaces and req.workspace_id not in auth_ctx.allowed_workspaces:
         from fastapi import HTTPException
         raise HTTPException(
             status_code=403,
@@ -92,9 +93,11 @@ async def remember_endpoint(
     content = extraction["cleaned_content"]
 
     vector = svc.embedder.embed_text(content)
-    now = datetime.now(timezone.utc)
+    now = req.created_at or datetime.now(timezone.utc)
+    if not now.tzinfo:
+        now = now.replace(tzinfo=timezone.utc)
     created_at_epoch = now.timestamp()
-    memory_id = str(uuid.uuid4())
+    memory_id = req.custom_id or str(uuid.uuid4())
 
     candidates = svc.lancedb_store.search_similar(vector, top_k=10)
     conflicts_resolved = await svc.conflict_resolver.detect_and_resolve_conflicts(
@@ -109,6 +112,7 @@ async def remember_endpoint(
     # Sync LanceDB vector store so deprecated memories don't pollute dense search
     for deprecated_id in conflicts_resolved:
         svc.lancedb_store.delete_memory(deprecated_id)
+        await svc.sqlite_store.mark_outbox_processed(deprecated_id, "DELETE")
 
     expires_at = now + timedelta(hours=req.ttl_hours) if req.ttl_hours else None
     await svc.sqlite_store.insert_memory(
@@ -135,6 +139,7 @@ async def remember_endpoint(
         workspace_id=req.workspace_id,
         expires_at_epoch=expires_at_epoch
     )
+    await svc.sqlite_store.mark_outbox_processed(memory_id, "UPSERT")
 
     # Extract knowledge graph triplets and persist in SQLite
     triplets = svc.graph_extractor.extract_triplets(req.content)
@@ -169,7 +174,8 @@ async def recall_endpoint(
     3. Hybrid scoring fusion & Exponential temporal decay.
     4. Batch SQLite metadata retrieval.
     """
-    if req.workspace_id and "*" not in _auth.allowed_workspaces and req.workspace_id not in _auth.allowed_workspaces:
+    auth_ctx = _auth if isinstance(_auth, TenantContext) else TenantContext()
+    if req.workspace_id and "*" not in auth_ctx.allowed_workspaces and req.workspace_id not in auth_ctx.allowed_workspaces:
         from fastapi import HTTPException
         raise HTTPException(
             status_code=403,
@@ -179,6 +185,94 @@ async def recall_endpoint(
     t0 = time.perf_counter()
     now_epoch = datetime.now(timezone.utc).timestamp()
     now_iso = datetime.now(timezone.utc).isoformat()
+
+    # 1. True Time-Travel pathway: if as_of is requested, reconstruct historical state from event ledger
+    if req.as_of:
+        req_as_of_iso = (req.as_of if req.as_of.tzinfo else req.as_of.replace(tzinfo=timezone.utc)).isoformat()
+        past_records = await svc.sqlite_store.get_memories_as_of(req_as_of_iso, workspace_id=req.workspace_id)
+        if req.source_agent:
+            past_records = [r for r in past_records if r.get("source_agent") == req.source_agent]
+        if req.category:
+            past_records = [r for r in past_records if r.get("category") == req.category]
+
+        if req.query and req.query.strip():
+            query_words = [w.lower() for w in req.query.split() if len(w) > 2]
+            if query_words:
+                def score_past(r):
+                    txt = (r["content"] + " " + (r.get("entity_key") or "")).lower()
+                    return sum(1.0 for w in query_words if w in txt)
+                past_records.sort(key=score_past, reverse=True)
+
+        final_memories = []
+        for meta in past_records[:req.top_k]:
+            c_at = datetime.fromisoformat(meta["timestamp"])
+            final_memories.append(RecalledMemory(
+                id=meta["memory_id"],
+                content=meta["content"],
+                source_agent=meta["source_agent"],
+                workspace_id=meta.get("workspace_id", "default"),
+                role_authority=float(meta.get("role_authority", 0.5)),
+                entity_key=meta.get("entity_key"),
+                category=meta["category"],
+                metadata=json.loads(meta.get("metadata_json", "{}")),
+                confidence=1.0,
+                vector_score=1.0,
+                bm25_score=1.0,
+                hybrid_score=1.0,
+                decayed_score=1.0,
+                created_at=c_at,
+                version=1
+            ))
+        latency = (time.perf_counter() - t0) * 1000
+        return RecallResponse(
+            query=req.query,
+            memories=final_memories,
+            graph_triplets=[],
+            latency_ms=latency,
+            total_found=len(final_memories)
+        )
+
+    # 2. True Audit pathway: if changed_since is requested, return all mutations from event ledger
+    if req.changed_since:
+        req_since_iso = (req.changed_since if req.changed_since.tzinfo else req.changed_since.replace(tzinfo=timezone.utc)).isoformat()
+        audit_events = await svc.sqlite_store.get_events_since(req_since_iso, workspace_id=req.workspace_id)
+        if req.source_agent:
+            audit_events = [e for e in audit_events if e.get("source_agent") == req.source_agent]
+        if req.category:
+            audit_events = [e for e in audit_events if e.get("category") == req.category]
+
+        final_memories = []
+        for ev in audit_events[:req.top_k]:
+            c_at = datetime.fromisoformat(ev["timestamp"])
+            ev_meta = json.loads(ev.get("metadata_json", "{}"))
+            ev_meta["_event_type"] = ev["event_type"]
+            if ev.get("superseded_by"):
+                ev_meta["_superseded_by"] = ev["superseded_by"]
+            final_memories.append(RecalledMemory(
+                id=ev["memory_id"],
+                content=ev["content"],
+                source_agent=ev["source_agent"],
+                workspace_id=ev.get("workspace_id", "default"),
+                role_authority=float(ev.get("role_authority", 0.5)),
+                entity_key=ev.get("entity_key"),
+                category=ev["category"],
+                metadata=ev_meta,
+                confidence=1.0,
+                vector_score=1.0,
+                bm25_score=1.0,
+                hybrid_score=1.0,
+                decayed_score=1.0,
+                created_at=c_at,
+                version=1
+            ))
+        latency = (time.perf_counter() - t0) * 1000
+        return RecallResponse(
+            query=req.query,
+            memories=final_memories,
+            graph_triplets=[],
+            latency_ms=latency,
+            total_found=len(final_memories)
+        )
 
     query_vector = svc.embedder.embed_text(req.query)
 

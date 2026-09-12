@@ -45,12 +45,6 @@ class AsyncMemoryWriteBuffer:
                     pass
             await self.flush_all()
 
-    async def enqueue(self, item: Dict[str, Any]) -> asyncio.Future:
-        loop = asyncio.get_running_loop()
-        future = loop.create_future()
-        await self._queue.put((item, future))
-        return future
-
     async def _flush_worker(self):
         while self._running:
             try:
@@ -81,12 +75,16 @@ class AsyncMemoryWriteBuffer:
                     'vector': item['vector'],
                     'source_agent': item.get('source_agent', 'unknown'),
                     'category': item.get('category', 'general'),
-                    'created_at_epoch': item.get('created_at_epoch', 0.0)
+                    'created_at_epoch': item.get('created_at_epoch', 0.0),
+                    'workspace_id': item.get('workspace_id', 'default'),
+                    'expires_at_epoch': item.get('expires_at_epoch', 0.0)
                 }
                 for item in batch if 'vector' in item
             ]
             if lancedb_items:
                 self.lancedb_store.add_vectors_batch(lancedb_items)
+                for item in batch:
+                    await self.sqlite_store.mark_outbox_processed(item['memory_id'], 'UPSERT')
 
             for fut in futures:
                 if not fut.done():

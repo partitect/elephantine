@@ -141,6 +141,45 @@ class SqliteMetadataStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_ws_time ON memory_events(workspace_id, timestamp);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON memory_events(event_type, timestamp);")
 
+            # Immutable ledger engine enforcement: prevent any UPDATE or DELETE on memory_events
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS trg_memory_events_no_update
+                BEFORE UPDATE ON memory_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'memory_events table is immutable append-only');
+                END;
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS trg_memory_events_no_delete
+                BEFORE DELETE ON memory_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'memory_events table is immutable append-only');
+                END;
+            """)
+
+            # Backfill initial events from existing memories if ledger is empty
+            conn.execute("""
+                INSERT INTO memory_events (
+                    event_id, memory_id, event_type, workspace_id, source_agent,
+                    role_authority, content, category, entity_key, metadata_json, timestamp, superseded_by
+                )
+                SELECT
+                    'backfill-' || m.id,
+                    m.id,
+                    CASE WHEN m.is_active = 1 THEN 'CREATED' ELSE 'SUPERSEDED' END,
+                    m.workspace_id,
+                    m.source_agent,
+                    m.role_authority,
+                    m.content,
+                    m.category,
+                    m.entity_key,
+                    m.metadata_json,
+                    m.created_at,
+                    m.deprecated_by
+                FROM memories m
+                WHERE NOT EXISTS (SELECT 1 FROM memory_events LIMIT 1);
+            """)
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS lancedb_outbox (
                     id TEXT PRIMARY KEY,
@@ -213,6 +252,21 @@ class SqliteMetadataStore:
                 meta_json,
                 created_at.isoformat()
             ))
+            # 3. Transactional Outbox for LanceDB Sync
+            outbox_id = str(uuid.uuid4())
+            outbox_payload = json.dumps({
+                "memory_id": memory_id,
+                "source_agent": source_agent,
+                "category": category,
+                "created_at_epoch": created_at.timestamp(),
+                "workspace_id": workspace_id,
+                "expires_at_epoch": expires_at.timestamp() if expires_at else 0.0
+            }, ensure_ascii=False)
+            await db.execute("""
+                INSERT INTO lancedb_outbox (
+                    id, memory_id, operation, payload_json, created_at, status
+                ) VALUES (?, ?, 'UPSERT', ?, ?, 'pending')
+            """, (outbox_id, memory_id, outbox_payload, created_at.isoformat()))
             await db.commit()
 
     async def get_active_by_entity(self, entity_key: str, workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -234,6 +288,7 @@ class SqliteMetadataStore:
         import uuid
         now = datetime.now(timezone.utc).isoformat()
         event_id = str(uuid.uuid4())
+        outbox_id = str(uuid.uuid4())
         async with aiosqlite.connect(str(self.db_path)) as db:
             db.row_factory = aiosqlite.Row
             c = await db.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
@@ -265,6 +320,12 @@ class SqliteMetadataStore:
                     now,
                     new_memory_id
                 ))
+                # Stage delete in LanceDB outbox
+                await db.execute("""
+                    INSERT INTO lancedb_outbox (
+                        id, memory_id, operation, payload_json, created_at, status
+                    ) VALUES (?, ?, 'DELETE', '{}', ?, 'pending')
+                """, (outbox_id, memory_id, now))
             await db.commit()
 
     async def deactivate_memory(self, memory_id: str) -> bool:
@@ -272,6 +333,7 @@ class SqliteMetadataStore:
         import uuid
         now = datetime.now(timezone.utc).isoformat()
         event_id = str(uuid.uuid4())
+        outbox_id = str(uuid.uuid4())
         async with aiosqlite.connect(str(self.db_path)) as db:
             db.row_factory = aiosqlite.Row
             c = await db.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
@@ -302,6 +364,12 @@ class SqliteMetadataStore:
                 mem["metadata_json"],
                 now
             ))
+            # Stage delete in LanceDB outbox
+            await db.execute("""
+                INSERT INTO lancedb_outbox (
+                    id, memory_id, operation, payload_json, created_at, status
+                ) VALUES (?, ?, 'DELETE', '{}', ?, 'pending')
+            """, (outbox_id, memory_id, now))
             await db.commit()
             return cursor.rowcount > 0
 
@@ -334,6 +402,44 @@ class SqliteMetadataStore:
                 params.append(workspace_id)
             query += " ORDER BY e.timestamp DESC"
             cursor = await db.execute(query, tuple(params))
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def get_events_since(
+        self,
+        since_timestamp: str,
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        True Audit Query: retrieves all memory mutations (CREATED, SUPERSEDED, DEACTIVATED)
+        that occurred on or after since_timestamp.
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            query = "SELECT * FROM memory_events WHERE timestamp >= ?"
+            params = [since_timestamp]
+            if workspace_id:
+                query += " AND workspace_id = ?"
+                params.append(workspace_id)
+            query += " ORDER BY timestamp ASC"
+            cursor = await db.execute(query, tuple(params))
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def mark_outbox_processed(self, memory_id: str, operation: str = "UPSERT") -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            await db.execute("""
+                UPDATE lancedb_outbox
+                SET status = 'processed', processed_at = ?
+                WHERE memory_id = ? AND operation = ? AND status = 'pending'
+            """, (now, memory_id, operation))
+            await db.commit()
+
+    async def get_pending_outbox(self) -> List[Dict[str, Any]]:
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM lancedb_outbox WHERE status = 'pending' ORDER BY created_at ASC")
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
@@ -538,37 +644,75 @@ class SqliteMetadataStore:
     async def insert_memories_batch(self, items: List[Dict[str, Any]]) -> int:
         """
         High-throughput batch insertion inside a single atomic SQLite transaction.
-        Eliminates per-item lock contention under high concurrency.
+        Eliminates per-item lock contention under high concurrency and guarantees
+        event ledger audit logging and transactional LanceDB outbox consistency.
         """
         if not items:
             return 0
 
+        import uuid
         async with aiosqlite.connect(str(self.db_path)) as db:
             await db.execute("PRAGMA foreign_keys=ON;")
-            params = []
+            mem_params = []
+            event_params = []
+            outbox_params = []
             for item in items:
                 created_at = item.get("created_at") or datetime.now(timezone.utc)
                 if isinstance(created_at, datetime):
                     created_at_str = created_at.isoformat()
+                    created_at_epoch = created_at.timestamp()
                 else:
                     created_at_str = str(created_at)
+                    try:
+                        created_at_epoch = datetime.fromisoformat(created_at_str.replace("Z", "+00:00")).timestamp()
+                    except Exception:
+                        created_at_epoch = datetime.now(timezone.utc).timestamp()
 
                 expires_at = item.get("expires_at")
-                expires_at_str = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
+                if isinstance(expires_at, datetime):
+                    expires_at_str = expires_at.isoformat()
+                    expires_at_epoch = expires_at.timestamp()
+                elif expires_at:
+                    expires_at_str = str(expires_at)
+                    try:
+                        expires_at_epoch = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00")).timestamp()
+                    except Exception:
+                        expires_at_epoch = 0.0
+                else:
+                    expires_at_str = None
+                    expires_at_epoch = 0.0
 
-                params.append((
-                    item["memory_id"],
-                    item["content"],
-                    item.get("source_agent", "unknown"),
-                    item.get("entity_key"),
-                    item.get("category", "general"),
-                    float(item.get("confidence", 1.0)),
-                    json.dumps(item.get("metadata", {}), ensure_ascii=False),
-                    created_at_str,
-                    created_at_str,
-                    expires_at_str,
-                    item.get("workspace_id", "default"),
-                    float(item.get("role_authority", 0.5))
+                ws_id = item.get("workspace_id", "default")
+                authority = float(item.get("role_authority", 0.5))
+                category = item.get("category", "general")
+                source_agent = item.get("source_agent", "unknown")
+                meta_dict = item.get("metadata", {})
+                meta_json = json.dumps(meta_dict, ensure_ascii=False)
+                mem_id = item["memory_id"]
+                content = item["content"]
+                entity_key = item.get("entity_key")
+                confidence = float(item.get("confidence", 1.0))
+
+                mem_params.append((
+                    mem_id, content, source_agent, entity_key, category, confidence,
+                    meta_json, created_at_str, created_at_str, expires_at_str, ws_id, authority
+                ))
+
+                event_params.append((
+                    str(uuid.uuid4()), mem_id, 'CREATED', ws_id, source_agent,
+                    authority, content, category, entity_key, meta_json, created_at_str
+                ))
+
+                outbox_payload = json.dumps({
+                    "memory_id": mem_id,
+                    "source_agent": source_agent,
+                    "category": category,
+                    "created_at_epoch": created_at_epoch,
+                    "workspace_id": ws_id,
+                    "expires_at_epoch": expires_at_epoch
+                }, ensure_ascii=False)
+                outbox_params.append((
+                    str(uuid.uuid4()), mem_id, 'UPSERT', outbox_payload, created_at_str
                 ))
 
             await db.executemany("""
@@ -577,7 +721,21 @@ class SqliteMetadataStore:
                     metadata_json, created_at, updated_at, expires_at, version, is_active,
                     workspace_id, role_authority
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
-            """, params)
+            """, mem_params)
+
+            await db.executemany("""
+                INSERT INTO memory_events (
+                    event_id, memory_id, event_type, workspace_id, source_agent,
+                    role_authority, content, category, entity_key, metadata_json, timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, event_params)
+
+            await db.executemany("""
+                INSERT INTO lancedb_outbox (
+                    id, memory_id, operation, payload_json, created_at, status
+                ) VALUES (?, ?, ?, ?, ?, 'pending')
+            """, outbox_params)
+
             await db.commit()
             return len(items)
 

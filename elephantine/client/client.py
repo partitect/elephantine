@@ -27,8 +27,11 @@ class ElephantineClient:
         entity_key: Optional[str] = None,
         workspace_id: str = "default",
         role_authority: float = 0.5,
+        confidence: float = 1.0,
         ttl_hours: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        custom_id: Optional[str] = None,
+        created_at: Optional[str] = None
     ) -> Dict[str, Any]:
         payload = {
             "content": content,
@@ -37,9 +40,14 @@ class ElephantineClient:
             "entity_key": entity_key,
             "workspace_id": workspace_id,
             "role_authority": role_authority,
+            "confidence": confidence,
             "ttl_hours": ttl_hours,
             "metadata": metadata or {}
         }
+        if custom_id:
+            payload["custom_id"] = custom_id
+        if created_at:
+            payload["created_at"] = created_at
         resp = self._client.post("/remember", json=payload)
         resp.raise_for_status()
         return resp.json()
@@ -144,8 +152,11 @@ class AsyncElephantineClient:
         entity_key: Optional[str] = None,
         workspace_id: str = "default",
         role_authority: float = 0.5,
+        confidence: float = 1.0,
         ttl_hours: Optional[float] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        custom_id: Optional[str] = None,
+        created_at: Optional[str] = None
     ) -> Dict[str, Any]:
         payload = {
             "content": content,
@@ -154,9 +165,14 @@ class AsyncElephantineClient:
             "entity_key": entity_key,
             "workspace_id": workspace_id,
             "role_authority": role_authority,
+            "confidence": confidence,
             "ttl_hours": ttl_hours,
             "metadata": metadata or {}
         }
+        if custom_id:
+            payload["custom_id"] = custom_id
+        if created_at:
+            payload["created_at"] = created_at
         resp = await self._client.post("/remember", json=payload)
         resp.raise_for_status()
         return resp.json()

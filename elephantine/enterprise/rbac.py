@@ -55,21 +55,36 @@ class ApiKeyManager:
             try:
                 parsed = json.loads(raw)
                 for k, v in parsed.items():
+                    ws_list = v.get("allowed_workspaces", ["*"])
+                    auth_val = float(v.get("max_role_authority", 1.0))
                     self._keys[k] = TenantContext(
                         tenant_id=v.get("tenant_id", "default_tenant"),
                         agent_id=v.get("agent_id", "default_agent"),
                         roles=v.get("roles", [ROLE_VIEWER]),
+                        allowed_workspaces=set(ws_list) if isinstance(ws_list, (list, set)) else {str(ws_list)},
+                        max_role_authority=auth_val,
                         is_enterprise=True
                     )
             except Exception:
                 pass
 
-    def register_key(self, api_key: str, tenant_id: str, roles: List[str], agent_id: str = "agent"):
-        """Dynamically registers an API key."""
+    def register_key(
+        self,
+        api_key: str,
+        tenant_id: str,
+        roles: List[str],
+        agent_id: str = "agent",
+        allowed_workspaces: Optional[List[str]] = None,
+        max_role_authority: float = 1.0
+    ):
+        """Dynamically registers an API key with workspace boundaries and authority limits."""
+        ws_set = set(allowed_workspaces) if allowed_workspaces else {"*"}
         self._keys[api_key] = TenantContext(
             tenant_id=tenant_id,
             agent_id=agent_id,
             roles=roles,
+            allowed_workspaces=ws_set,
+            max_role_authority=float(max_role_authority),
             is_enterprise=True
         )
 

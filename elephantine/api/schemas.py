@@ -15,7 +15,8 @@ class MemoryItemBase(BaseModel):
     ttl_hours: Optional[float] = Field(default=None, description="Optional TTL in hours before expiry")
 
 class RememberRequest(MemoryItemBase):
-    pass
+    custom_id: Optional[str] = Field(default=None, description="Optional caller-supplied memory ID (for lossless migrations)")
+    created_at: Optional[datetime] = Field(default=None, description="Optional historical creation timestamp (for lossless migrations)")
 
 class RememberResponse(BaseModel):
     id: str
