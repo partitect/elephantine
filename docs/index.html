@@ -103,6 +103,7 @@
         <a href="#architecture" class="hover:text-brand-400 transition-colors">Architecture</a>
         <a href="#mcp" class="hover:text-brand-400 transition-colors">MCP Protocol</a>
         <a href="#pricing" class="hover:text-brand-400 transition-colors">Pricing</a>
+        <a href="https://github.com/partitect/elephantine#readme" target="_blank" class="hover:text-brand-400 transition-colors">Docs</a>
         <a href="https://pypi.org/project/elephantine/" target="_blank" class="hover:text-brand-400 transition-colors">PyPI</a>
       </nav>
 
@@ -225,8 +226,8 @@
           <div class="flex items-start gap-3">
             <span class="text-brand-purple font-bold">[ORCHESTRATOR]</span>
             <div>
-              <p class="text-slate-200">Writing project architectural mandate...</p>
-              <p class="text-emerald-400 mt-1">✓ remember_fact(scope="architecture", key="database", value="PostgreSQL 16 with pgvector", authority=5)</p>
+              <p class="text-slate-200">Writing project architectural mandate (Admin authority)...</p>
+              <p class="text-emerald-400 mt-1">✓ remember_fact(scope="system", key="active_model", value="Claude 3.5 Sonnet with FastMCP", authority=4)</p>
               <p class="text-slate-500 text-xs">Vectorized via all-MiniLM-L6-v2 (AVX-512 ONNX) → Latency: 2.1ms</p>
             </div>
           </div>
@@ -234,9 +235,9 @@
           <div class="flex items-start gap-3">
             <span class="text-brand-accent font-bold">[RESEARCHER]</span>
             <div>
-              <p class="text-slate-200">Querying shared memory for database stack before benchmarking...</p>
-              <p class="text-sky-300 mt-1">➜ recall_context(query="what database are we using?")</p>
-              <p class="text-slate-400 text-xs">Retrieved: "PostgreSQL 16 with pgvector" (Confidence: 0.96, Authority: 5)</p>
+              <p class="text-slate-200">Querying shared memory for system configuration...</p>
+              <p class="text-sky-300 mt-1">➜ recall_context(query="what model is active for code review?")</p>
+              <p class="text-slate-400 text-xs">Retrieved: "Claude 3.5 Sonnet with FastMCP" (Confidence: 0.98, Authority: 4)</p>
             </div>
           </div>
 
@@ -244,7 +245,7 @@
             <span class="text-amber-400 font-bold">[DEVELOPER]</span>
             <div>
               <p class="text-slate-200">Attempting to overwrite with lower authority (authority=2)...</p>
-              <p class="text-amber-300 mt-1">⚡ Conflict Detected: Authority 2 cannot overwrite Authority 5 without consensus.</p>
+              <p class="text-amber-300 mt-1">⚡ Conflict Detected: Authority 2 (Specialist) cannot overwrite Authority 4 (Admin) without consensus.</p>
               <p class="text-brand-400 text-xs">✓ Role-Authority Consensus Engine prevented hallucinations and drift.</p>
             </div>
           </div>
@@ -315,14 +316,17 @@
       </div>
 
       <!-- Card 5 -->
-      <div class="glass-card rounded-2xl p-8 transition-all duration-300">
+      <div class="glass-card rounded-2xl p-8 transition-all duration-300 md:col-span-2 lg:col-span-1">
         <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-6">
           <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
         </div>
         <h3 class="text-xl font-bold text-white mb-2">Live WebUI Memory Inspector</h3>
-        <p class="text-slate-400 text-sm leading-relaxed">
+        <p class="text-slate-400 text-sm leading-relaxed mb-4">
           Built-in dashboard at <code class="text-brand-400 font-mono text-xs">/dashboard</code> to inspect semantic vector spaces, visualize memory graphs, verify scopes, and edit facts in real time.
         </p>
+        <div class="rounded-xl overflow-hidden border border-slate-800 shadow-md">
+          <img src="assets/dashboard_mockup.svg" alt="Elephantine WebUI Dashboard" class="w-full h-auto object-cover">
+        </div>
       </div>
 
       <!-- Card 6 -->
@@ -545,7 +549,7 @@
             </ul>
           </div>
 
-          <a href="mailto:support@elephantine.dev?subject=Enterprise%20Inquiry%20Elephantine" class="mt-8 w-full py-3 rounded-xl bg-dark-card border border-purple-500/40 hover:border-purple-500 text-center text-purple-200 font-semibold text-xs transition-all">
+          <a href="mailto:contact@partitect.com?cc=telatkaya@gmail.com&subject=Enterprise%20Inquiry%20Elephantine" class="mt-8 w-full py-3 rounded-xl bg-dark-card border border-purple-500/40 hover:border-purple-500 text-center text-purple-200 font-semibold text-xs transition-all">
             Contact Enterprise Sales
           </a>
         </div>
