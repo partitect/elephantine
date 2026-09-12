@@ -56,15 +56,17 @@ class ServiceContainer:
         self.consolidator = MemoryConsolidator(self.sqlite_store)
         self.proactive_engine = ProactiveEngine(self.sqlite_store)
 
-    async def replay_pending_outbox(self) -> int:
-        """Sweeps and replays any pending transactional outbox writes to LanceDB idempotently."""
+    async def replay_pending_outbox(self, worker_id: Optional[str] = None, limit: int = 50) -> int:
+        """Sweeps and replays any pending transactional outbox writes to LanceDB idempotently with distributed lease locking."""
         import logging
         logger = logging.getLogger(__name__)
-        pending = await self.sqlite_store.get_pending_outbox()
+        wid = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
+        claimed = await self.sqlite_store.claim_pending_outbox(worker_id=wid, limit=limit)
         replayed = 0
-        for entry in pending:
+        for entry in claimed:
             op = entry["operation"]
             mem_id = entry["memory_id"]
+            entry_id = entry["id"]
             try:
                 # Idempotent write: delete existing vector first to prevent duplicates
                 self.lancedb_store.delete_memory(mem_id)
@@ -82,10 +84,14 @@ class ServiceContainer:
                             workspace_id=payload.get("workspace_id", "default"),
                             expires_at_epoch=payload.get("expires_at_epoch", 0.0)
                         )
-                await self.sqlite_store.mark_outbox_processed(mem_id, op)
+                await self.sqlite_store.mark_outbox_processed(mem_id, op, entry_id=entry_id)
                 replayed += 1
             except Exception as e:
-                logger.error(f"Failed to replay outbox entry {entry.get('id')} for memory {mem_id}: {e}", exc_info=True)
+                logger.error(f"Failed to replay outbox entry {entry_id} for memory {mem_id}: {e}", exc_info=True)
+                try:
+                    await self.sqlite_store.release_outbox_claim(entry_id)
+                except Exception:
+                    pass
         return replayed
 
 _container: Optional[ServiceContainer] = None
@@ -219,18 +225,26 @@ async def recall_endpoint(
     4. Batch SQLite metadata retrieval.
     """
     auth_ctx = _auth if isinstance(_auth, TenantContext) else TenantContext()
-    if req.workspace_id and "*" not in auth_ctx.allowed_workspaces and req.workspace_id not in auth_ctx.allowed_workspaces:
+    target_ws = req.workspace_id
+    if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant":
+        target_ws = req.workspace_id or "default"
+
+    if target_ws and "*" not in auth_ctx.allowed_workspaces and target_ws not in auth_ctx.allowed_workspaces:
         from fastapi import HTTPException
         raise HTTPException(
             status_code=403,
-            detail=f"Forbidden: Caller is not authorized to recall from workspace '{req.workspace_id}'."
+            detail=f"Forbidden: Caller is not authorized to recall from workspace '{target_ws}'."
+        )
+
+    if target_ws is None and "*" not in auth_ctx.allowed_workspaces:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id."
         )
 
     # Multi-tenant storage namespace partition: strictly prevent cross-tenant vector leakage
-    if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant":
-        effective_ws = f"{auth_ctx.tenant_id}:{req.workspace_id or 'default'}"
-    else:
-        effective_ws = req.workspace_id
+    effective_ws = f"{auth_ctx.tenant_id}:{target_ws}" if (auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant") else target_ws
 
     t0 = time.perf_counter()
     now_epoch = datetime.now(timezone.utc).timestamp()

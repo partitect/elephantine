@@ -3,7 +3,7 @@ import sqlite3
 import aiosqlite
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from elephantine.config import settings
@@ -202,10 +202,19 @@ class SqliteMetadataStore:
                     payload_json TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL,
                     processed_at TIMESTAMP,
-                    status TEXT NOT NULL DEFAULT 'pending'
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    claimed_at TIMESTAMP,
+                    worker_id TEXT
                 );
             """)
+            for col_def in [("claimed_at", "TIMESTAMP"), ("worker_id", "TEXT")]:
+                try:
+                    conn.execute(f"ALTER TABLE lancedb_outbox ADD COLUMN {col_def[0]} {col_def[1]};")
+                except sqlite3.OperationalError:
+                    pass
+
             conn.execute("CREATE INDEX IF NOT EXISTS idx_outbox_pending ON lancedb_outbox(status, created_at);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_outbox_claim ON lancedb_outbox(status, claimed_at);")
         conn.close()
 
     async def insert_memory(
@@ -489,15 +498,69 @@ class SqliteMetadataStore:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def mark_outbox_processed(self, memory_id: str, operation: str = "UPSERT") -> None:
+    async def mark_outbox_processed(self, memory_id: str, operation: str = "UPSERT", entry_id: Optional[str] = None) -> None:
         now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            if entry_id:
+                await db.execute("""
+                    UPDATE lancedb_outbox
+                    SET status = 'processed', processed_at = ?
+                    WHERE id = ?
+                """, (now, entry_id))
+            else:
+                await db.execute("""
+                    UPDATE lancedb_outbox
+                    SET status = 'processed', processed_at = ?
+                    WHERE memory_id = ? AND operation = ? AND status IN ('pending', 'in_progress')
+                """, (now, memory_id, operation))
+            await db.commit()
+
+    async def release_outbox_claim(self, entry_id: str) -> None:
+        """Releases a claimed outbox item back to pending upon failure or lease abandonment."""
         async with aiosqlite.connect(str(self.db_path)) as db:
             await db.execute("""
                 UPDATE lancedb_outbox
-                SET status = 'processed', processed_at = ?
-                WHERE memory_id = ? AND operation = ? AND status = 'pending'
-            """, (now, memory_id, operation))
+                SET status = 'pending', claimed_at = NULL, worker_id = NULL
+                WHERE id = ? AND status = 'in_progress'
+            """, (entry_id,))
             await db.commit()
+
+    async def claim_pending_outbox(
+        self,
+        worker_id: str,
+        limit: int = 50,
+        lease_duration_seconds: int = 60
+    ) -> List[Dict[str, Any]]:
+        """
+        Atomically acquires a distributed lease on pending or expired outbox records.
+        Guarantees that across multiple processes or instances, only one worker processes an event.
+        """
+        threshold = (datetime.now(timezone.utc) - timedelta(seconds=lease_duration_seconds)).isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute("BEGIN IMMEDIATE")
+            cursor = await db.execute("""
+                SELECT id, memory_id, operation, payload_json, created_at, status, claimed_at, worker_id
+                FROM lancedb_outbox
+                WHERE status = 'pending' OR (status = 'in_progress' AND (claimed_at IS NULL OR claimed_at < ?))
+                ORDER BY created_at ASC
+                LIMIT ?
+            """, (threshold, limit))
+            rows = await cursor.fetchall()
+            if not rows:
+                await db.commit()
+                return []
+
+            claimed_ids = [r["id"] for r in rows]
+            placeholders = ",".join(["?"] * len(claimed_ids))
+            await db.execute(f"""
+                UPDATE lancedb_outbox
+                SET status = 'in_progress', claimed_at = ?, worker_id = ?
+                WHERE id IN ({placeholders})
+            """, [now_iso, worker_id] + claimed_ids)
+            await db.commit()
+            return [dict(r) for r in rows]
 
     async def get_pending_outbox(self) -> List[Dict[str, Any]]:
         async with aiosqlite.connect(str(self.db_path)) as db:

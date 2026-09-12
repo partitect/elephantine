@@ -390,6 +390,66 @@ async def test_outbox_replay_worker():
 
 
 @pytest.mark.asyncio
+async def test_outbox_distributed_lease_concurrency():
+    """Verify that multiple concurrent workers atomically lease outbox items without duplicate claims or race conditions."""
+    import uuid
+    from datetime import datetime, timezone
+    from elephantine.api.routes.memory import get_container
+
+    svc = get_container()
+    store = svc.sqlite_store
+    uid = uuid.uuid4().hex[:8]
+    mem_id_1 = f"mem-outbox-lease-1-{uid}"
+    mem_id_2 = f"mem-outbox-lease-2-{uid}"
+    ws = f"ws-outbox-{uid}"
+    now = datetime.now(timezone.utc)
+
+    # Insert two memories to create pending outbox records
+    for mid, content in [(mem_id_1, "Lease item 1"), (mem_id_2, "Lease item 2")]:
+        await store.insert_memory(
+            memory_id=mid,
+            content=content,
+            source_agent="lease-bot",
+            entity_key=f"key-{uid}",
+            category="fact",
+            confidence=1.0,
+            metadata={},
+            created_at=now,
+            workspace_id=ws
+        )
+
+    # Worker A claims outbox records (limit 1)
+    claimed_a = await store.claim_pending_outbox(worker_id="worker-A", limit=1, lease_duration_seconds=60)
+    assert len(claimed_a) == 1
+    item_a = claimed_a[0]
+
+    # Worker B claims concurrently (limit 1) -> must get a DIFFERENT item, never the one leased to A
+    claimed_b = await store.claim_pending_outbox(worker_id="worker-B", limit=1, lease_duration_seconds=60)
+    assert len(claimed_b) == 1
+    item_b = claimed_b[0]
+    assert item_a["id"] != item_b["id"]
+
+    # Worker A successfully finishes and marks item_a processed
+    await store.mark_outbox_processed(item_a["memory_id"], item_a["operation"], entry_id=item_a["id"])
+
+    # Worker B simulates failure: releases claim
+    await store.release_outbox_claim(item_b["id"])
+
+    # Now item_b should be available again for Worker C
+    reclaimed_c = await store.claim_pending_outbox(worker_id="worker-C", limit=1, lease_duration_seconds=60)
+    assert len(reclaimed_c) == 1
+    assert reclaimed_c[0]["id"] == item_b["id"]
+
+    # Worker C finishes
+    await store.mark_outbox_processed(item_b["memory_id"], item_b["operation"], entry_id=item_b["id"])
+
+    # Now nothing left for these items
+    pending_now = await store.get_pending_outbox()
+    assert not any(p["id"] in (item_a["id"], item_b["id"]) for p in pending_now)
+
+
+
+@pytest.mark.asyncio
 async def test_changed_since_query_filtering():
     """Verify changed_since filters events matching the query parameter."""
     import uuid

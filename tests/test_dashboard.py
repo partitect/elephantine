@@ -48,3 +48,92 @@ async def test_dashboard_auth_enforcement_in_enterprise_mode(monkeypatch):
         # With valid Authorization header: must succeed with 200
         res_auth = await client.get("/api/v1/memories", headers={"Authorization": "Bearer test-dash-key"})
         assert res_auth.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_dashboard_enterprise_allowed_workspaces_isolation(monkeypatch):
+    """Verify that an enterprise caller cannot access forbidden workspaces within the same tenant via dashboard routes."""
+    import uuid
+    from datetime import datetime, timezone
+    from elephantine.config import settings
+    from elephantine.enterprise.rbac import api_key_manager
+    from elephantine.storage.sqlite_store import SqliteMetadataStore
+
+    monkeypatch.setattr(settings, "AUTH_ENABLED", True)
+    # Register restricted enterprise key with access only to 'allowed-proj'
+    api_key_manager.register_key(
+        "restricted-dash-key",
+        "tenant-corp",
+        ["admin"],
+        allowed_workspaces=["allowed-proj"]
+    )
+
+    store = SqliteMetadataStore()
+    now = datetime.now(timezone.utc)
+    uid = uuid.uuid4().hex[:6]
+    # Create a memory in allowed workspace
+    mem_allowed_id = f"mem-allowed-{uid}"
+    await store.insert_memory(
+        memory_id=mem_allowed_id,
+        content="Corp public roadmap.",
+        source_agent="corp-bot",
+        entity_key="roadmap",
+        category="fact",
+        confidence=1.0,
+        metadata={},
+        created_at=now,
+        workspace_id="tenant-corp:allowed-proj"
+    )
+    # Create a memory in secret/forbidden workspace of the same tenant
+    mem_forbidden_id = f"mem-forbidden-{uid}"
+    await store.insert_memory(
+        memory_id=mem_forbidden_id,
+        content="Corp secret acquisition plan.",
+        source_agent="corp-bot",
+        entity_key="m-and-a",
+        category="fact",
+        confidence=1.0,
+        metadata={},
+        created_at=now,
+        workspace_id="tenant-corp:forbidden-proj"
+    )
+
+    app = create_app()
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": "Bearer restricted-dash-key"}
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. /api/v1/workspaces: should return only 'allowed-proj' and NOT 'forbidden-proj'
+        ws_res = await client.get("/api/v1/workspaces", headers=headers)
+        assert ws_res.status_code == 200
+        workspaces = ws_res.json()
+        assert "allowed-proj" in workspaces
+        assert "forbidden-proj" not in workspaces
+
+        # 2. /api/v1/stats with forbidden workspace must return 403
+        stats_forbidden = await client.get("/api/v1/stats?workspace_id=forbidden-proj", headers=headers)
+        assert stats_forbidden.status_code == 403
+
+        # stats with allowed workspace must succeed
+        stats_allowed = await client.get("/api/v1/stats?workspace_id=allowed-proj", headers=headers)
+        assert stats_allowed.status_code == 200
+
+        # 3. /api/v1/memories with forbidden workspace must return 403
+        mem_forbidden = await client.get("/api/v1/memories?workspace_id=forbidden-proj", headers=headers)
+        assert mem_forbidden.status_code == 403
+
+        # memories with allowed workspace must succeed
+        mem_allowed = await client.get("/api/v1/memories?workspace_id=allowed-proj", headers=headers)
+        assert mem_allowed.status_code == 200
+
+        # 4. /api/v1/graph/all with forbidden workspace must return 403
+        graph_forbidden = await client.get("/api/v1/graph/all?workspace_id=forbidden-proj", headers=headers)
+        assert graph_forbidden.status_code == 403
+
+        # 5. DELETE /api/v1/memories/{mem_forbidden_id} must return 403 Forbidden even though same tenant!
+        del_forbidden = await client.delete(f"/api/v1/memories/{mem_forbidden_id}", headers=headers)
+        assert del_forbidden.status_code == 403
+
+        # DELETE memory in allowed workspace must succeed
+        del_allowed = await client.delete(f"/api/v1/memories/{mem_allowed_id}", headers=headers)
+        assert del_allowed.status_code == 200
+

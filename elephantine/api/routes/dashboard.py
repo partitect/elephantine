@@ -515,7 +515,10 @@ async def get_workspaces(
     all_ws = await sqlite_store.get_all_workspaces()
     if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
         prefix = f"{_auth.tenant_id}:"
-        return [w[len(prefix):] for w in all_ws if w.startswith(prefix)]
+        tenant_workspaces = [w[len(prefix):] for w in all_ws if w.startswith(prefix)]
+        if "*" in _auth.allowed_workspaces:
+            return tenant_workspaces
+        return [w for w in tenant_workspaces if w in _auth.allowed_workspaces]
     if "*" in _auth.allowed_workspaces:
         return all_ws
     return [w for w in all_ws if w in _auth.allowed_workspaces]
@@ -526,11 +529,17 @@ async def get_stats(
     _auth: TenantContext = Depends(require_read_permission)
 ):
     """Returns aggregated memory engine metrics and DB storage footprint."""
-    eff_ws = workspace_id
+    target_ws = workspace_id
     if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
-        eff_ws = f"{_auth.tenant_id}:{workspace_id}" if workspace_id else f"{_auth.tenant_id}:default"
-    elif workspace_id and "*" not in _auth.allowed_workspaces and workspace_id not in _auth.allowed_workspaces:
-        raise HTTPException(status_code=403, detail="Forbidden: Unauthorized workspace.")
+        target_ws = workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
     return await sqlite_store.get_engine_stats(workspace_id=eff_ws)
 
 @router.get("/api/v1/memories", response_model=List[Dict[str, Any]])
@@ -542,11 +551,17 @@ async def list_memories(
     _auth: TenantContext = Depends(require_read_permission)
 ):
     """Lists memories for inspection with pagination and active/deprecated filter."""
-    eff_ws = workspace_id
+    target_ws = workspace_id
     if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
-        eff_ws = f"{_auth.tenant_id}:{workspace_id}" if workspace_id else f"{_auth.tenant_id}:default"
-    elif workspace_id and "*" not in _auth.allowed_workspaces and workspace_id not in _auth.allowed_workspaces:
-        raise HTTPException(status_code=403, detail="Forbidden: Unauthorized workspace.")
+        target_ws = workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
     return await sqlite_store.list_all_memories(
         limit=limit,
         offset=offset,
@@ -561,11 +576,17 @@ async def get_graph_all(
     _auth: TenantContext = Depends(require_read_permission)
 ):
     """Returns knowledge graph triplets formatted for Cytoscape.js network visualizer."""
-    eff_ws = workspace_id
+    target_ws = workspace_id
     if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
-        eff_ws = f"{_auth.tenant_id}:{workspace_id}" if workspace_id else f"{_auth.tenant_id}:default"
-    elif workspace_id and "*" not in _auth.allowed_workspaces and workspace_id not in _auth.allowed_workspaces:
-        raise HTTPException(status_code=403, detail="Forbidden: Unauthorized workspace.")
+        target_ws = workspace_id or "default"
+
+    if target_ws and "*" not in _auth.allowed_workspaces and target_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{target_ws}'.")
+
+    if target_ws is None and "*" not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Caller is restricted to specific workspaces. Specify an authorized workspace_id.")
+
+    eff_ws = f"{_auth.tenant_id}:{target_ws}" if (_auth.is_enterprise and _auth.tenant_id != "default_tenant") else target_ws
 
     triplets = await sqlite_store.get_all_graph_triplets(workspace_id=eff_ws, limit=limit)
     nodes_map: Dict[str, Dict[str, Any]] = {}
@@ -606,12 +627,15 @@ async def deprecate_memory(
     if not mem:
         raise HTTPException(status_code=404, detail="Memory item not found.")
     ws = mem.get("workspace_id", "default")
+    raw_ws = ws
     if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
         prefix = f"{_auth.tenant_id}:"
         if not ws.startswith(prefix):
             raise HTTPException(status_code=403, detail="Forbidden: Memory belongs to another tenant.")
-    elif "*" not in _auth.allowed_workspaces and ws not in _auth.allowed_workspaces:
-        raise HTTPException(status_code=403, detail="Forbidden workspace.")
+        raw_ws = ws[len(prefix):]
+
+    if "*" not in _auth.allowed_workspaces and raw_ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail=f"Forbidden: Caller is not authorized for workspace '{raw_ws}'.")
 
     success = await sqlite_store.deactivate_memory(memory_id)
     if not success:
