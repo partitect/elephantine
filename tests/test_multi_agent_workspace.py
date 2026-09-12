@@ -136,3 +136,100 @@ async def test_ttl_expiry_and_temporal_recall():
         })
         assert rec_perm.status_code == 200
         assert any("microkernel" in m["content"] for m in rec_perm.json()["memories"])
+
+
+@pytest.mark.asyncio
+async def test_immutable_event_ledger_time_travel():
+    """Verify that every memory state change is preserved in the immutable ledger."""
+    import asyncio
+    from datetime import datetime, timezone
+    import uuid
+    from elephantine.api.routes.memory import get_container
+    svc = get_container()
+    uid = uuid.uuid4().hex[:8]
+    ws = f"time-travel-ws-{uid}"
+    key = f"service:deploy_state-{uid}"
+
+    # Step 1: Initial deployment (Version 1)
+    now1 = datetime.now(timezone.utc)
+    id1 = f"mem-tt-1-{uid}"
+    await svc.sqlite_store.insert_memory(
+        memory_id=id1,
+        content="Deployment status is STAGING.",
+        source_agent="devops-lead",
+        entity_key=key,
+        category="status",
+        confidence=1.0,
+        metadata={"build": 101},
+        created_at=now1,
+        workspace_id=ws,
+        role_authority=0.8
+    )
+
+    await asyncio.sleep(0.05)
+    time_checkpoint = datetime.now(timezone.utc).isoformat()
+    await asyncio.sleep(0.05)
+
+    # Step 2: Superseded by Production deployment (Version 2)
+    id2 = f"mem-tt-2-{uid}"
+    now2 = datetime.now(timezone.utc)
+    await svc.sqlite_store.deprecate_memory(id1, id2)
+    await svc.sqlite_store.insert_memory(
+        memory_id=id2,
+        content="Deployment status is PRODUCTION.",
+        source_agent="release-manager",
+        entity_key=key,
+        category="status",
+        confidence=1.0,
+        metadata={"build": 102},
+        created_at=now2,
+        workspace_id=ws,
+        role_authority=1.0
+    )
+
+    # Current view: only Version 2 is active
+    active = await svc.sqlite_store.get_active_by_entity(key, workspace_id=ws)
+    assert len(active) == 1
+    assert active[0]["content"] == "Deployment status is PRODUCTION."
+
+    # Time-travel query as of checkpoint: must faithfully return Version 1 (STAGING)
+    past_state = await svc.sqlite_store.get_memories_as_of(time_checkpoint, workspace_id=ws)
+    assert len(past_state) >= 1
+    staging_records = [r for r in past_state if r["entity_key"] == key]
+    assert len(staging_records) == 1
+    assert staging_records[0]["content"] == "Deployment status is STAGING."
+    assert staging_records[0]["event_type"] == "CREATED"
+
+
+@pytest.mark.asyncio
+async def test_server_side_authority_clamping():
+    """Verify that caller cannot claim higher authority than allowed by security context."""
+    from elephantine.core.auth_interface import TenantContext
+    from elephantine.api.routes.memory import remember_endpoint, get_container
+    from elephantine.api.schemas import RememberRequest
+
+    svc = get_container()
+    # Caller context strictly limits max_role_authority to 0.4 (Junior/Worker)
+    restricted_auth = TenantContext(
+        tenant_id="test_tenant",
+        agent_id="junior_bot",
+        roles=["editor"],
+        is_enterprise=True,
+        max_role_authority=0.4,
+        allowed_workspaces=["allowed_ws"]
+    )
+
+    # Caller tries to claim role_authority = 1.0 (Admin/Architect)
+    req = RememberRequest(
+        content="Attempting unauthorized high-authority override.",
+        category="security",
+        workspace_id="allowed_ws",
+        role_authority=1.0
+    )
+
+    res = await remember_endpoint(req, svc, _auth=restricted_auth)
+    assert res.status_code if hasattr(res, "status_code") else True
+
+    # Check database: stored role_authority must be clamped to 0.4!
+    stored = await svc.sqlite_store.get_memory_by_id(res.id)
+    assert stored["role_authority"] == 0.4

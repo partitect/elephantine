@@ -76,6 +76,16 @@ async def remember_endpoint(
     3. Conflict detection and LWW Soft-deprecation.
     4. Atomic persistence in LanceDB and SQLite WAL.
     """
+    # Server-side authority & workspace verification:
+    # Caller cannot claim higher authority than permitted by its security context
+    effective_authority = min(req.role_authority, _auth.max_role_authority)
+    if "*" not in _auth.allowed_workspaces and req.workspace_id not in _auth.allowed_workspaces:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail=f"Forbidden: Caller is not authorized for workspace '{req.workspace_id}'."
+        )
+
     extraction = svc.extractor.extract_structured(req.content, default_category=req.category)
     entity_key = req.entity_key or extraction["entity_key"]
     category = extraction["category"]
@@ -93,7 +103,7 @@ async def remember_endpoint(
         category=category,
         similar_memories=candidates,
         workspace_id=req.workspace_id,
-        role_authority=req.role_authority
+        role_authority=effective_authority
     )
 
     # Sync LanceDB vector store so deprecated memories don't pollute dense search
@@ -112,7 +122,7 @@ async def remember_endpoint(
         created_at=now,
         expires_at=expires_at,
         workspace_id=req.workspace_id,
-        role_authority=req.role_authority
+        role_authority=effective_authority
     )
 
     expires_at_epoch = expires_at.timestamp() if expires_at else 0.0
@@ -159,6 +169,13 @@ async def recall_endpoint(
     3. Hybrid scoring fusion & Exponential temporal decay.
     4. Batch SQLite metadata retrieval.
     """
+    if req.workspace_id and "*" not in _auth.allowed_workspaces and req.workspace_id not in _auth.allowed_workspaces:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail=f"Forbidden: Caller is not authorized to recall from workspace '{req.workspace_id}'."
+        )
+
     t0 = time.perf_counter()
     now_epoch = datetime.now(timezone.utc).timestamp()
     now_iso = datetime.now(timezone.utc).isoformat()

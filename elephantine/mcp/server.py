@@ -207,10 +207,9 @@ async def answer_query(
     if not memories:
         return "No relevant memories or facts found in project history for this query."
 
-    lines = [f"Found {len(memories)} relevant verified fact(s):\n"]
-    for i, m in enumerate(memories, 1):
-        lines.append(f"[{i}] ({m['category'].upper()}) {m['content']}")
-    return "\n".join(lines)
+    from elephantine.core.gguf_extractor import LlamaCppEngine
+    engine = LlamaCppEngine.get_instance()
+    return engine.synthesize_answer(question, memories)
 
 @mcp.tool()
 async def get_procedural_workflow(pattern_name: str) -> Dict[str, Any]:

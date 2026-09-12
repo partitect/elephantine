@@ -8,6 +8,8 @@ class TenantContext(BaseModel):
     agent_id: str = Field(default="default_agent", description="Calling agent identifier")
     roles: List[str] = Field(default_factory=lambda: ["admin"], description="Security roles, e.g. ['read', 'write', 'admin']")
     is_enterprise: bool = Field(default=False, description="Flag indicating enterprise tier license active")
+    max_role_authority: float = Field(default=1.0, ge=0.0, le=1.0, description="Upper bound for authority this caller can claim")
+    allowed_workspaces: List[str] = Field(default_factory=lambda: ["*"], description="Workspaces caller is permitted to access")
 
 class IAuthorizationEngine(ABC):
     """Abstract interface defining memory access authorization."""

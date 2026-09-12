@@ -97,6 +97,10 @@ class LanceDbVectorStore:
         self.table.add(data)
         return len(data)
 
+    def _sanitize_filter_val(self, val: str) -> str:
+        """Sanitizes string inputs used in LanceDB where predicates to prevent injection."""
+        return val.replace("'", "''").replace("\\", "\\\\").strip()
+
     def search_similar(
         self,
         query_vector: List[float],
@@ -110,14 +114,17 @@ class LanceDbVectorStore:
 
         filters = []
         if workspace_id:
-            filters.append(f"workspace_id = '{workspace_id}'")
+            safe_ws = self._sanitize_filter_val(workspace_id)
+            filters.append(f"workspace_id = '{safe_ws}'")
         if source_agent:
-            filters.append(f"source_agent = '{source_agent}'")
+            safe_src = self._sanitize_filter_val(source_agent)
+            filters.append(f"source_agent = '{safe_src}'")
         if category:
-            filters.append(f"category = '{category}'")
+            safe_cat = self._sanitize_filter_val(category)
+            filters.append(f"category = '{safe_cat}'")
         if current_epoch:
             # Exclude expired memories at the dense index level
-            filters.append(f"(expires_at_epoch == 0.0 OR expires_at_epoch > {current_epoch})")
+            filters.append(f"(expires_at_epoch == 0.0 OR expires_at_epoch > {float(current_epoch)})")
 
         if filters:
             query = query.where(" AND ".join(filters))

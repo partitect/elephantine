@@ -368,14 +368,30 @@ def main():
             if not content:
                 continue
             cat = it.get("category") or it.get("type", "fact")
+            # Lossless preservation: capture all Memanto fields into metadata
+            meta = it.get("metadata", {})
+            if "title" in it:
+                meta["title"] = it["title"]
+            if "provenance" in it:
+                meta["provenance"] = it["provenance"]
+            if "source" in it or "source_reference" in it:
+                meta["source_reference"] = it.get("source_reference") or it.get("source")
+            if "tags" in it:
+                meta["tags"] = it["tags"]
+            if "status" in it:
+                meta["memanto_status"] = it["status"]
+            if "created_at" in it or "timestamp" in it:
+                meta["original_timestamp"] = it.get("created_at") or it.get("timestamp")
+            meta["_memanto_raw"] = it  # 100% Lossless fallback
+
             c.remember(
                 content=content,
                 category=cat,
-                entity_key=it.get("entity_key") or it.get("key"),
+                entity_key=it.get("entity_key") or it.get("key") or it.get("id"),
                 source_agent=it.get("source_agent") or it.get("agent_id", "memanto_import"),
                 workspace_id=ws,
                 role_authority=float(it.get("role_authority", it.get("authority", 0.5))),
-                metadata=it.get("metadata", {})
+                metadata=meta
             )
             count += 1
         print(f"✓ Successfully imported {count} memories from Memanto into Elephantine!")

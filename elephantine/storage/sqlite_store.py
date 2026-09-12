@@ -122,18 +122,37 @@ class SqliteMetadataStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_proactive_agent ON proactive_triggers(target_agent, workspace_id, status);")
 
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS proactive_alerts (
-                    id TEXT PRIMARY KEY,
-                    trigger_id TEXT NOT NULL,
+                CREATE TABLE IF NOT EXISTS memory_events (
+                    event_id TEXT PRIMARY KEY,
                     memory_id TEXT NOT NULL,
-                    target_agent TEXT NOT NULL DEFAULT 'default',
+                    event_type TEXT NOT NULL,
                     workspace_id TEXT NOT NULL DEFAULT 'default',
-                    triggered_at TIMESTAMP NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    FOREIGN KEY(trigger_id) REFERENCES proactive_triggers(id) ON DELETE CASCADE
+                    source_agent TEXT NOT NULL,
+                    role_authority REAL NOT NULL DEFAULT 0.5,
+                    content TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    entity_key TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    timestamp TIMESTAMP NOT NULL,
+                    superseded_by TEXT
                 );
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_pending ON proactive_alerts(target_agent, workspace_id, status);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_mem ON memory_events(memory_id, timestamp);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_ws_time ON memory_events(workspace_id, timestamp);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON memory_events(event_type, timestamp);")
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS lancedb_outbox (
+                    id TEXT PRIMARY KEY,
+                    memory_id TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    processed_at TIMESTAMP,
+                    status TEXT NOT NULL DEFAULT 'pending'
+                );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_outbox_pending ON lancedb_outbox(status, created_at);")
         conn.close()
 
     async def insert_memory(
@@ -150,8 +169,12 @@ class SqliteMetadataStore:
         workspace_id: str = "default",
         role_authority: float = 0.5
     ) -> None:
+        import uuid
+        event_id = str(uuid.uuid4())
+        meta_json = json.dumps(metadata, ensure_ascii=False)
         async with aiosqlite.connect(str(self.db_path)) as db:
             await db.execute("PRAGMA foreign_keys=ON;")
+            # 1. Insert into current state table
             await db.execute("""
                 INSERT INTO memories (
                     id, content, source_agent, entity_key, category, confidence,
@@ -165,12 +188,30 @@ class SqliteMetadataStore:
                 entity_key,
                 category,
                 confidence,
-                json.dumps(metadata, ensure_ascii=False),
+                meta_json,
                 created_at.isoformat(),
                 created_at.isoformat(),
                 expires_at.isoformat() if expires_at else None,
                 workspace_id,
                 role_authority
+            ))
+            # 2. Record in Immutable Append-Only Event Ledger
+            await db.execute("""
+                INSERT INTO memory_events (
+                    event_id, memory_id, event_type, workspace_id, source_agent,
+                    role_authority, content, category, entity_key, metadata_json, timestamp
+                ) VALUES (?, ?, 'CREATED', ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                event_id,
+                memory_id,
+                workspace_id,
+                source_agent,
+                role_authority,
+                content,
+                category,
+                entity_key,
+                meta_json,
+                created_at.isoformat()
             ))
             await db.commit()
 
@@ -190,26 +231,111 @@ class SqliteMetadataStore:
             return [dict(row) for row in rows]
 
     async def deprecate_memory(self, memory_id: str, new_memory_id: str) -> None:
+        import uuid
         now = datetime.now(timezone.utc).isoformat()
+        event_id = str(uuid.uuid4())
         async with aiosqlite.connect(str(self.db_path)) as db:
-            await db.execute("""
-                UPDATE memories
-                SET is_active = 0, updated_at = ?, deprecated_by = ?
-                WHERE id = ?
-            """, (now, new_memory_id, memory_id))
+            db.row_factory = aiosqlite.Row
+            c = await db.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
+            mem = await c.fetchone()
+            if mem:
+                # Update current view
+                await db.execute("""
+                    UPDATE memories
+                    SET is_active = 0, updated_at = ?, deprecated_by = ?
+                    WHERE id = ?
+                """, (now, new_memory_id, memory_id))
+                # Record deprecation in event ledger
+                await db.execute("""
+                    INSERT INTO memory_events (
+                        event_id, memory_id, event_type, workspace_id, source_agent,
+                        role_authority, content, category, entity_key, metadata_json,
+                        timestamp, superseded_by
+                    ) VALUES (?, ?, 'SUPERSEDED', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    event_id,
+                    memory_id,
+                    mem["workspace_id"],
+                    mem["source_agent"],
+                    mem["role_authority"],
+                    mem["content"],
+                    mem["category"],
+                    mem["entity_key"],
+                    mem["metadata_json"],
+                    now,
+                    new_memory_id
+                ))
             await db.commit()
 
     async def deactivate_memory(self, memory_id: str) -> bool:
         """Soft-deletes / deactivates a memory manually from WebUI/API."""
+        import uuid
         now = datetime.now(timezone.utc).isoformat()
+        event_id = str(uuid.uuid4())
         async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            c = await db.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
+            mem = await c.fetchone()
+            if not mem:
+                return False
             cursor = await db.execute("""
                 UPDATE memories
                 SET is_active = 0, updated_at = ?
                 WHERE id = ?
             """, (now, memory_id))
+            # Record in event ledger
+            await db.execute("""
+                INSERT INTO memory_events (
+                    event_id, memory_id, event_type, workspace_id, source_agent,
+                    role_authority, content, category, entity_key, metadata_json,
+                    timestamp
+                ) VALUES (?, ?, 'DEACTIVATED', ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                event_id,
+                memory_id,
+                mem["workspace_id"],
+                mem["source_agent"],
+                mem["role_authority"],
+                mem["content"],
+                mem["category"],
+                mem["entity_key"],
+                mem["metadata_json"],
+                now
+            ))
             await db.commit()
             return cursor.rowcount > 0
+
+    async def get_memories_as_of(
+        self,
+        as_of_timestamp: str,
+        workspace_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        True Time-Travel Query: reconstructs the exact active memories as they existed
+        at as_of_timestamp using the immutable event ledger.
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            # All creations up to as_of that were not superseded/deactivated before as_of
+            query = """
+                SELECT e.* FROM memory_events e
+                WHERE e.event_type = 'CREATED'
+                  AND e.timestamp <= ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM memory_events d
+                      WHERE d.memory_id = e.memory_id
+                        AND d.event_type IN ('SUPERSEDED', 'DEACTIVATED')
+                        AND d.timestamp <= ?
+                  )
+            """
+            params = [as_of_timestamp, as_of_timestamp]
+            if workspace_id:
+                query += " AND e.workspace_id = ?"
+                params.append(workspace_id)
+            query += " ORDER BY e.timestamp DESC"
+            cursor = await db.execute(query, tuple(params))
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
 
     async def search_bm25(
         self,

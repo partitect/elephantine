@@ -112,3 +112,38 @@ class LlamaCppEngine:
                 logger.warning(f"GroundingValidator discarded ungrounded GGUF fact: '{fact_item.fact}'")
 
         return validated_facts
+
+    def synthesize_answer(self, question: str, contexts: List[Dict[str, Any]]) -> str:
+        """
+        Synthesizes a factual, grounded answer to a question using retrieved memory contexts.
+        """
+        if not self.is_available:
+            # Clean grounded summary fallback when GGUF model is not loaded
+            lines = [f"Found {len(contexts)} grounded memory item(s) for '{question}':\n"]
+            for i, c in enumerate(contexts, 1):
+                src = c.get('source_agent', 'system')
+                lines.append(f"[{i}] ({c.get('category', 'fact').upper()}) {c.get('content')} [source: {src}]")
+            return "\n".join(lines)
+
+        self._load_model()
+        formatted_context = "\n".join([
+            f"- [{i+1}] {c.get('content')} (Source: {c.get('source_agent', 'unknown')}, Category: {c.get('category', 'general')})"
+            for i, c in enumerate(contexts)
+        ])
+
+        prompt = (
+            "<|im_start|>system\n"
+            "You are Elephantine Cognitive Memory Assistant. Synthesize a concise, factual answer to the user's question "
+            "based strictly on the provided retrieved memories. Cite the memory index [1], [2] when stating facts. "
+            "If the memories contradict each other, highlight the conflict and rely on the higher authority source. "
+            "If the memories do not contain the answer, state that clearly.<|im_end|>\n"
+            f"<|im_start|>user\nContext Memories:\n{formatted_context}\n\nQuestion: {question}<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+
+        response = self._llm.create_completion(
+            prompt=prompt,
+            max_tokens=512,
+            temperature=self.temperature
+        )
+        return response["choices"][0]["text"].strip()

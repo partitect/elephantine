@@ -19,9 +19,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="MemAgent Core",
-        description="Local-First, CPU-Native Cognitive AI Memory Engine",
-        version="0.1.0",
+        title="Elephantine Core",
+        description="Local-First, CPU-Native Cognitive AI Memory Layer for Autonomous Agents",
+        version="0.3.5",
         debug=settings.DEBUG,
         lifespan=lifespan
     )
