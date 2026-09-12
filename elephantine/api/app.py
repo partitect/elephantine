@@ -13,6 +13,7 @@ async def lifespan(app: FastAPI):
     # Startup: Replay pending transactional outbox events to LanceDB and start background engine
     container = get_container()
     await container.replay_pending_outbox()
+    await container.sqlite_store.record_expired_events()
     await container.proactive_engine.start()
     yield
     # Shutdown: Stop proactive background evaluator daemon

@@ -222,6 +222,41 @@ async def get_procedural_workflow(pattern_name: str) -> Dict[str, Any]:
         return {"error": f"Workflow '{pattern_name}' not found"}
     return wf.model_dump()
 
+# Drop-in 100% Memanto Compatibility Tool Aliases
+@mcp.tool()
+async def remember(
+    content: str,
+    category: str = "fact",
+    entity_key: Optional[str] = None,
+    source_agent: str = "default",
+    workspace_id: Optional[str] = None,
+    role_authority: float = 0.5,
+    ttl_hours: Optional[float] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> str:
+    """Drop-in alias for remember_fact (Memanto compatibility)."""
+    return await remember_fact(content, category, entity_key, source_agent, workspace_id, role_authority, ttl_hours, metadata)
+
+@mcp.tool()
+async def recall(
+    query: str,
+    top_k: int = 5,
+    category: Optional[str] = None,
+    workspace_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Drop-in alias for recall_context (Memanto compatibility)."""
+    return await recall_context(query, top_k, category, workspace_id)
+
+@mcp.tool()
+async def answer(
+    question: str,
+    top_k: int = 5,
+    category: Optional[str] = None,
+    workspace_id: Optional[str] = None
+) -> str:
+    """Drop-in alias for answer_query (Memanto compatibility)."""
+    return await answer_query(question, top_k, category, workspace_id)
+
 def main():
     """Main entrypoint for MCP stdio mode (Cursor / Claude Desktop)."""
     mcp.run(transport="stdio")

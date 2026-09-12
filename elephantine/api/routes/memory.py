@@ -57,13 +57,17 @@ class ServiceContainer:
         self.proactive_engine = ProactiveEngine(self.sqlite_store)
 
     async def replay_pending_outbox(self) -> int:
-        """Sweeps and replays any pending transactional outbox writes to LanceDB."""
-        try:
-            pending = await self.sqlite_store.get_pending_outbox()
-            replayed = 0
-            for entry in pending:
-                op = entry["operation"]
-                mem_id = entry["memory_id"]
+        """Sweeps and replays any pending transactional outbox writes to LanceDB idempotently."""
+        import logging
+        logger = logging.getLogger(__name__)
+        pending = await self.sqlite_store.get_pending_outbox()
+        replayed = 0
+        for entry in pending:
+            op = entry["operation"]
+            mem_id = entry["memory_id"]
+            try:
+                # Idempotent write: delete existing vector first to prevent duplicates
+                self.lancedb_store.delete_memory(mem_id)
                 if op == "UPSERT":
                     payload = json.loads(entry["payload_json"])
                     mem = await self.sqlite_store.get_memory_by_id(mem_id)
@@ -78,13 +82,11 @@ class ServiceContainer:
                             workspace_id=payload.get("workspace_id", "default"),
                             expires_at_epoch=payload.get("expires_at_epoch", 0.0)
                         )
-                elif op == "DELETE":
-                    self.lancedb_store.delete_memory(mem_id)
                 await self.sqlite_store.mark_outbox_processed(mem_id, op)
                 replayed += 1
-            return replayed
-        except Exception:
-            return 0
+            except Exception as e:
+                logger.error(f"Failed to replay outbox entry {entry.get('id')} for memory {mem_id}: {e}", exc_info=True)
+        return replayed
 
 _container: Optional[ServiceContainer] = None
 
@@ -118,7 +120,8 @@ async def remember_endpoint(
         )
 
     # Multi-tenant storage namespace partition
-    effective_ws = f"{auth_ctx.tenant_id}:{req.workspace_id}" if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant" else req.workspace_id
+    target_ws = req.workspace_id or "default"
+    effective_ws = f"{auth_ctx.tenant_id}:{target_ws}" if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant" else target_ws
 
     # Verbatim / Raw preservation for exact imports or explicit categories
     if req.metadata.get("_exact") or req.category != "general":
@@ -223,8 +226,11 @@ async def recall_endpoint(
             detail=f"Forbidden: Caller is not authorized to recall from workspace '{req.workspace_id}'."
         )
 
-    # Multi-tenant storage namespace partition
-    effective_ws = f"{auth_ctx.tenant_id}:{req.workspace_id}" if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant" and req.workspace_id else req.workspace_id
+    # Multi-tenant storage namespace partition: strictly prevent cross-tenant vector leakage
+    if auth_ctx.is_enterprise and auth_ctx.tenant_id != "default_tenant":
+        effective_ws = f"{auth_ctx.tenant_id}:{req.workspace_id or 'default'}"
+    else:
+        effective_ws = req.workspace_id
 
     t0 = time.perf_counter()
     now_epoch = datetime.now(timezone.utc).timestamp()

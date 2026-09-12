@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import HTMLResponse
 from typing import List, Dict, Any, Optional
 from elephantine.storage.sqlite_store import SqliteMetadataStore
+from elephantine.core.auth_interface import TenantContext
+from elephantine.api.middleware.auth import require_read_permission, require_write_permission
 
 router = APIRouter()
 sqlite_store = SqliteMetadataStore()
@@ -506,37 +508,66 @@ async def serve_dashboard():
     return HTMLResponse(content=DASHBOARD_HTML)
 
 @router.get("/api/v1/workspaces", response_model=List[str])
-async def get_workspaces():
-    """Returns list of distinct workspaces/projects in the memory store."""
-    return await sqlite_store.get_all_workspaces()
+async def get_workspaces(
+    _auth: TenantContext = Depends(require_read_permission)
+):
+    """Returns list of distinct workspaces/projects authorized for the caller."""
+    all_ws = await sqlite_store.get_all_workspaces()
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        prefix = f"{_auth.tenant_id}:"
+        return [w[len(prefix):] for w in all_ws if w.startswith(prefix)]
+    if "*" in _auth.allowed_workspaces:
+        return all_ws
+    return [w for w in all_ws if w in _auth.allowed_workspaces]
 
 @router.get("/api/v1/stats")
-async def get_stats(workspace_id: Optional[str] = Query(None)):
+async def get_stats(
+    workspace_id: Optional[str] = Query(None),
+    _auth: TenantContext = Depends(require_read_permission)
+):
     """Returns aggregated memory engine metrics and DB storage footprint."""
-    return await sqlite_store.get_engine_stats(workspace_id=workspace_id)
+    eff_ws = workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        eff_ws = f"{_auth.tenant_id}:{workspace_id}" if workspace_id else f"{_auth.tenant_id}:default"
+    elif workspace_id and "*" not in _auth.allowed_workspaces and workspace_id not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Unauthorized workspace.")
+    return await sqlite_store.get_engine_stats(workspace_id=eff_ws)
 
 @router.get("/api/v1/memories", response_model=List[Dict[str, Any]])
 async def list_memories(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     include_inactive: bool = Query(True),
-    workspace_id: Optional[str] = Query(None)
+    workspace_id: Optional[str] = Query(None),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     """Lists memories for inspection with pagination and active/deprecated filter."""
+    eff_ws = workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        eff_ws = f"{_auth.tenant_id}:{workspace_id}" if workspace_id else f"{_auth.tenant_id}:default"
+    elif workspace_id and "*" not in _auth.allowed_workspaces and workspace_id not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Unauthorized workspace.")
     return await sqlite_store.list_all_memories(
         limit=limit,
         offset=offset,
         include_inactive=include_inactive,
-        workspace_id=workspace_id
+        workspace_id=eff_ws
     )
 
 @router.get("/api/v1/graph/all")
 async def get_graph_all(
     workspace_id: Optional[str] = Query(None),
-    limit: int = Query(200, ge=1, le=1000)
+    limit: int = Query(200, ge=1, le=1000),
+    _auth: TenantContext = Depends(require_read_permission)
 ):
     """Returns knowledge graph triplets formatted for Cytoscape.js network visualizer."""
-    triplets = await sqlite_store.get_all_graph_triplets(workspace_id=workspace_id, limit=limit)
+    eff_ws = workspace_id
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        eff_ws = f"{_auth.tenant_id}:{workspace_id}" if workspace_id else f"{_auth.tenant_id}:default"
+    elif workspace_id and "*" not in _auth.allowed_workspaces and workspace_id not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden: Unauthorized workspace.")
+
+    triplets = await sqlite_store.get_all_graph_triplets(workspace_id=eff_ws, limit=limit)
     nodes_map: Dict[str, Dict[str, Any]] = {}
     edges: List[Dict[str, Any]] = []
 
@@ -566,8 +597,22 @@ async def get_graph_all(
     }
 
 @router.delete("/api/v1/memories/{memory_id}")
-async def deprecate_memory(memory_id: str):
+async def deprecate_memory(
+    memory_id: str,
+    _auth: TenantContext = Depends(require_write_permission)
+):
     """Soft-deprecates an active memory item via Last-Write-Wins logic."""
+    mem = await sqlite_store.get_memory_by_id(memory_id)
+    if not mem:
+        raise HTTPException(status_code=404, detail="Memory item not found.")
+    ws = mem.get("workspace_id", "default")
+    if _auth.is_enterprise and _auth.tenant_id != "default_tenant":
+        prefix = f"{_auth.tenant_id}:"
+        if not ws.startswith(prefix):
+            raise HTTPException(status_code=403, detail="Forbidden: Memory belongs to another tenant.")
+    elif "*" not in _auth.allowed_workspaces and ws not in _auth.allowed_workspaces:
+        raise HTTPException(status_code=403, detail="Forbidden workspace.")
+
     success = await sqlite_store.deactivate_memory(memory_id)
     if not success:
         raise HTTPException(status_code=404, detail="Memory item not found or already inactive.")

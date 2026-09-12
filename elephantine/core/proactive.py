@@ -119,6 +119,7 @@ class ProactiveEngine:
     async def _run_evaluator_loop(self) -> None:
         while self._running:
             try:
+                await self.sqlite_store.record_expired_events()
                 await self.evaluate_due_triggers()
             except Exception as e:
                 logger.error(f'Error during proactive triggers evaluation: {e}')

@@ -464,4 +464,11 @@ async def test_enterprise_tenant_namespace_isolation():
     # Tenant Beta must NOT see Tenant Alpha's memory
     assert not any("ZEUS-99" in m.content for m in res_b.memories)
 
+    # Tenant Beta recalls without workspace_id (workspace_id=None): must STILL NOT see Tenant Alpha's memory
+    res_b_global = await recall_endpoint(RecallRequest(
+        query="confidential code ZEUS",
+        workspace_id=None
+    ), svc, _auth=tenant_b)
+    assert not any("ZEUS-99" in m.content for m in res_b_global.memories)
+
 
